@@ -321,7 +321,7 @@ function renderDashboard() {
     else if (cur === 0 && prev > 0) { trendLabel = "Resting"; trendClass = "flat"; }
     else if (cur < prev) { trendLabel = "Lighter"; trendClass = "down"; }
     else { trendLabel = "Steady"; trendClass = "flat"; }
-    const color = MUSCLE_GROUPS[m];
+    const color = (MUSCLE_INFO[m] && MUSCLE_INFO[m].color) || "#5C6670";
     const maxScale = Math.max(cur, prev, 10);
     const pct = Math.min(100, Math.round((cur / maxScale) * 100));
     return `
@@ -543,11 +543,16 @@ function renderDayContent() {
 
     const titleRow = document.createElement("div");
     titleRow.className = "exercise-title-row";
-    const muscleColor = MUSCLE_GROUPS[ex.muscle] || "#5C6670";
+    const muscleColor = (MUSCLE_INFO[ex.muscle] && MUSCLE_INFO[ex.muscle].color) || "#5C6670";
+    const viewLabel = (MUSCLE_INFO[ex.muscle] && MUSCLE_INFO[ex.muscle].view) === "back" ? "Back view" : "Front view";
     titleRow.innerHTML = `
+      <div class="exercise-diagram" style="--chip-color:${muscleColor}">
+        ${bodyDiagramFor(ex.muscle)}
+      </div>
       <div class="exercise-name-wrap">
         <span class="exercise-name">${ex.name}</span>
         <span class="muscle-chip" style="--chip-color:${muscleColor}">${ex.muscle}</span>
+        <span class="view-label">${viewLabel}</span>
       </div>
       <span class="exercise-target">${ex.target}</span>`;
     card.appendChild(titleRow);
