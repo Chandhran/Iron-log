@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Iron Log — 16 Week Program</title>
+<meta name="theme-color" content="#141414">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Iron Log">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" class="brand-mark">
+      <div class="brand-text">
+        <span class="brand-name">IRON LOG</span>
+        <span class="brand-sub" id="phaseLabel">Week 1 · Strength</span>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-view="train">Train</button>
+      <button class="tab-btn" data-view="progress">Progress</button>
+      <button class="tab-btn" data-view="history">History</button>
+      <button class="tab-btn" data-view="sync">Sync</button>
+    </nav>
+  </header>
+
+  <!-- WEEK RAIL (signature element: 16-block program timeline) -->
+  <div class="rail-wrap">
+    <div class="rail" id="weekRail"></div>
+  </div>
+
+  <!-- TRAIN VIEW -->
+  <main id="view-train" class="view active">
+    <div class="day-strip" id="dayStrip"></div>
+    <div id="dayContent"></div>
+  </main>
+
+  <!-- PROGRESS VIEW -->
+  <main id="view-progress" class="view">
+    <div class="panel">
+      <label class="field-label" for="exerciseSelect">Exercise</label>
+      <select id="exerciseSelect"></select>
+    </div>
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <span class="chart-title">Top weight per session</span>
+      </div>
+      <canvas id="weightChart" height="180"></canvas>
+    </div>
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <span class="chart-title">Total volume (kg × reps)</span>
+      </div>
+      <canvas id="volumeChart" height="180"></canvas>
+    </div>
+    <div class="panel" id="prBox"></div>
+  </main>
+
+  <!-- HISTORY VIEW -->
+  <main id="view-history" class="view">
+    <div id="historyList" class="history-list"></div>
+    <div class="history-empty" id="historyEmpty" style="display:none;">
+      No sessions logged yet. Finish a workout in Train and hit Save.
+    </div>
+  </main>
+
+  <!-- SYNC VIEW -->
+  <main id="view-sync" class="view">
+    <div class="panel">
+      <div class="sync-status" id="syncStatus">Not connected</div>
+    </div>
+
+    <div class="panel">
+      <label class="field-label" for="ghOwner">GitHub username</label>
+      <input type="text" id="ghOwner" placeholder="e.g. chandhra">
+      <label class="field-label" for="ghRepo">Repo name</label>
+      <input type="text" id="ghRepo" placeholder="iron-log">
+      <label class="field-label" for="ghToken">Personal access token</label>
+      <input type="password" id="ghToken" placeholder="github_pat_...">
+      <button class="save-btn" id="ghSaveBtn" style="margin-top:10px;">Connect &amp; sync now</button>
+    </div>
+
+    <div class="panel sync-help">
+      <div class="chart-title" style="margin-bottom:8px;">How to get a token (2 min)</div>
+      <ol>
+        <li>On GitHub: tap your profile photo → <b>Settings</b>.</li>
+        <li>Scroll down → <b>Developer settings</b>.</li>
+        <li><b>Personal access tokens → Fine-grained tokens → Generate new token</b>.</li>
+        <li>Under "Repository access," choose <b>Only select repositories</b> → pick <b>iron-log</b>.</li>
+        <li>Under "Permissions → Repository permissions," set <b>Contents: Read and write</b>.</li>
+        <li>Generate, then copy the token here. GitHub only shows it once.</li>
+      </ol>
+      <div class="sync-note">This token only controls this one repo. Nothing else on your account is touched. It's stored only in this browser — never uploaded anywhere else.</div>
+    </div>
+
+    <button class="save-btn secondary-btn" id="ghDisconnectBtn">Disconnect</button>
+  </main>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="program-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
