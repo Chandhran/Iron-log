@@ -128,6 +128,7 @@ async function syncPullAndApply() {
     setSyncStatus(`Connected to ${cfg.owner}/${cfg.repo}`, "connected");
     renderRail();
     renderDayContent();
+    renderDashboard();
   } catch (e) {
     setSyncStatus("Connected, but last sync failed", "error");
   }
@@ -202,6 +203,197 @@ document.getElementById("ghDisconnectBtn").addEventListener("click", () => {
   showToast("Disconnected from GitHub");
 });
 
+// ---------- EXERCISE -> MUSCLE LOOKUP ----------
+const EXERCISE_MUSCLE = {};
+Object.values(PROGRAM).forEach(phase => {
+  phase.days.forEach(day => {
+    if (day.type === "training") {
+      day.exercises.forEach(ex => { EXERCISE_MUSCLE[ex.name] = ex.muscle; });
+    }
+  });
+});
+
+// ---------- DATE HELPERS ----------
+function parseISO(iso) { return new Date(iso + "T00:00:00"); }
+function getMonday(d) {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 = Sunday
+  const diff = (day === 0 ? -6 : 1) - day; // shift to Monday
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function sameDay(a, b) { return a.toDateString() === b.toDateString(); }
+
+// ---------- WEEKLY STATS (real, computed from logged sessions) ----------
+function computeWeekStats(weekStart) {
+  const weekEnd = addDays(weekStart, 7);
+  const weekSessions = sessions.filter(s => {
+    const d = parseISO(s.date);
+    return d >= weekStart && d < weekEnd;
+  });
+
+  const loggedDays = new Set(weekSessions.map(s => s.date)).size;
+
+  let volume = 0;
+  const muscleSets = {};
+  weekSessions.filter(s => !s.rest).forEach(s => {
+    s.exercises.forEach(ex => {
+      const muscle = EXERCISE_MUSCLE[ex.name] || "Full Body";
+      ex.sets.forEach(set => {
+        volume += (set.weight || 0) * (set.reps || 0);
+        muscleSets[muscle] = (muscleSets[muscle] || 0) + 1;
+      });
+    });
+  });
+
+  return { loggedDays, volume, muscleSets, weekSessions };
+}
+
+function computeStreak() {
+  let streak = 0;
+  let cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  const loggedDates = new Set(sessions.map(s => s.date));
+  // if nothing logged today yet, start counting from yesterday
+  if (!loggedDates.has(todayISO())) cursor = addDays(cursor, -1);
+  while (loggedDates.has(cursor.toISOString().slice(0, 10))) {
+    streak++;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+function computeHeatmap(monthsBack = 3) {
+  const loggedDates = new Set(sessions.map(s => s.date));
+  const now = new Date();
+  const months = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = monthDate.toLocaleDateString(undefined, { month: "short" });
+    const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+    const isCurrentMonth = (i === 0);
+    const lastDay = isCurrentMonth ? now.getDate() : daysInMonth;
+    const days = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(monthDate.getFullYear(), monthDate.getMonth(), d);
+      const iso = dt.toISOString().slice(0, 10);
+      days.push({ logged: loggedDates.has(iso), future: d > lastDay });
+    }
+    months.push({ label, days });
+  }
+  return months;
+}
+
+// ---------- DASHBOARD RENDER ----------
+let clockInterval;
+
+function renderDashboard() {
+  const el = document.getElementById("dashboard");
+  const monday = getMonday(new Date());
+  const prevMonday = addDays(monday, -7);
+  const thisWeek = computeWeekStats(monday);
+  const lastWeek = computeWeekStats(prevMonday);
+  const streak = computeStreak();
+  const heatmap = computeHeatmap(3);
+
+  // ----- day dots for this week (Mon..Sun) -----
+  const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
+  const weekDotsHtml = dayLetters.map((letter, i) => {
+    const d = addDays(monday, i);
+    const iso = d.toISOString().slice(0, 10);
+    const isToday = sameDay(d, new Date());
+    const logged = thisWeek.weekSessions.some(s => s.date === iso);
+    return `<div class="wk-dot-col">
+      <span class="wk-dot ${logged ? "filled" : ""} ${isToday ? "today" : ""}"></span>
+      <span class="wk-dot-label">${letter}</span>
+    </div>`;
+  }).join("");
+
+  // ----- muscle group cards: full weekly set calculator, every group shown -----
+  const muscleCardsHtml = MUSCLE_ORDER.map(m => {
+    const cur = thisWeek.muscleSets[m] || 0;
+    const prev = lastWeek.muscleSets[m] || 0;
+    let trendLabel, trendClass;
+    if (cur > prev) { trendLabel = "Growing"; trendClass = "up"; }
+    else if (cur === 0 && prev === 0) { trendLabel = "No sets"; trendClass = "flat"; }
+    else if (cur === 0 && prev > 0) { trendLabel = "Resting"; trendClass = "flat"; }
+    else if (cur < prev) { trendLabel = "Lighter"; trendClass = "down"; }
+    else { trendLabel = "Steady"; trendClass = "flat"; }
+    const color = MUSCLE_GROUPS[m];
+    const maxScale = Math.max(cur, prev, 10);
+    const pct = Math.min(100, Math.round((cur / maxScale) * 100));
+    return `
+      <div class="muscle-card">
+        <div class="muscle-card-top">
+          <span class="muscle-card-name">${m}</span>
+          <span class="muscle-trend ${trendClass}">${trendLabel}</span>
+        </div>
+        <div class="muscle-card-count">${cur}<span class="muscle-card-unit"> sets</span></div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${pct}%; background:${color}"></div></div>
+        <div class="muscle-card-compare">${prev} sets last week</div>
+      </div>`;
+  }).join("");
+
+  // ----- monthly heatmap -----
+  const heatmapHtml = heatmap.map(month => `
+    <div class="heat-month">
+      <div class="heat-month-label">${month.label}</div>
+      <div class="heat-grid">
+        ${month.days.map(d => `<span class="heat-dot ${d.logged ? "logged" : ""} ${d.future ? "future" : ""}"></span>`).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  el.innerHTML = `
+    <div class="bento-row">
+      <div class="bento-card bento-clock">
+        <div class="bento-label" id="clockDay">–</div>
+        <div class="bento-big" id="clockTime">--:--</div>
+        <div class="bento-sub" id="clockDate">–</div>
+      </div>
+      <div class="bento-card bento-streak">
+        <div class="bento-label">Streak</div>
+        <div class="bento-big">${streak}<span class="bento-unit">${streak === 1 ? "day" : "days"}</span></div>
+        <div class="bento-sub">consecutive days logged</div>
+      </div>
+    </div>
+
+    <div class="bento-card bento-week">
+      <div class="bento-label">This week</div>
+      <div class="wk-dots-row">${weekDotsHtml}</div>
+      <div class="bento-sub">${thisWeek.loggedDays}/7 days logged · ${Math.round(thisWeek.volume).toLocaleString()} kg total volume</div>
+    </div>
+
+    <div class="section-label">Weekly sets per muscle group</div>
+    <div class="muscle-card-row">${muscleCardsHtml}</div>
+
+    <div class="section-label">Training calendar</div>
+    <div class="bento-card heat-panel">
+      <div class="heat-row">${heatmapHtml}</div>
+    </div>
+  `;
+
+  startClock();
+}
+
+function startClock() {
+  if (clockInterval) clearInterval(clockInterval);
+  const update = () => {
+    const now = new Date();
+    const dayEl = document.getElementById("clockDay");
+    const timeEl = document.getElementById("clockTime");
+    const dateEl = document.getElementById("clockDate");
+    if (!dayEl) return; // dashboard not mounted (different tab)
+    dayEl.textContent = now.toLocaleDateString(undefined, { weekday: "long" });
+    timeEl.textContent = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    dateEl.textContent = now.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+  };
+  update();
+  clockInterval = setInterval(update, 15000);
+}
+
 // ---------- WEEK RAIL ----------
 function renderRail() {
   const rail = document.getElementById("weekRail");
@@ -253,6 +445,25 @@ function renderDayStrip() {
 }
 
 // ---------- DAY CONTENT ----------
+function debounce(fn, delay) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), delay);
+  };
+}
+
+function updateLoggedBadge(logged) {
+  const header = document.getElementById("dayHeaderTitle");
+  if (!header) return;
+  const existingBadge = header.querySelector(".logged-badge");
+  if (logged && !existingBadge) {
+    header.insertAdjacentHTML("beforeend", '<span class="logged-badge">Logged</span>');
+  } else if (!logged && existingBadge) {
+    existingBadge.remove();
+  }
+}
+
 function renderDayContent() {
   const phase = PROGRAM[phaseForWeek(state.week)];
   const day = phase.days[state.dayIndex];
@@ -263,50 +474,82 @@ function renderDayContent() {
 
   const header = document.createElement("div");
   header.className = "day-header";
-  header.innerHTML = `<h2>${day.title}${existing ? '<span class="logged-badge">Logged</span>' : ""}</h2>
-    <div class="day-meta">${day.name} · Week ${state.week}</div>`;
+  header.innerHTML = `<h2 id="dayHeaderTitle">${day.title}${existing ? '<span class="logged-badge">Logged</span>' : ""}</h2>
+    <div class="day-meta">${day.name} · Week ${state.week} · saves automatically as you type</div>`;
   container.appendChild(header);
 
   if (day.type === "rest") {
+    let currentSession = existing;
     const box = document.createElement("div");
     box.className = "exercise-card";
-    day.tasks.forEach(t => {
-      const row = document.createElement("div");
-      row.className = "task-row";
-      row.innerHTML = `<span>${t.task}</span><span class="task-note">${t.notes}</span>`;
+    day.tasks.forEach((t, i) => {
+      const row = document.createElement("label");
+      row.className = "task-row task-row-check";
+      const checked = currentSession?.tasksDone?.[i] ? "checked" : "";
+      row.innerHTML = `
+        <span class="task-check-left">
+          <input type="checkbox" data-task="${i}" ${checked}>
+          <span>${t.task}</span>
+        </span>
+        <span class="task-note">${t.notes}</span>`;
       box.appendChild(row);
     });
     container.appendChild(box);
 
-    const btn = document.createElement("button");
-    btn.className = "save-btn";
-    btn.textContent = existing ? "Update rest day" : "Mark rest day complete";
-    btn.addEventListener("click", () => {
-      const s = existing || { id: Date.now().toString(), week: state.week, day: day.name };
-      s.date = todayISO();
-      s.phase = phase.key;
-      s.dayTitle = day.title;
-      s.exercises = [];
-      s.rest = true;
-      if (!existing) sessions.push(s);
-      saveSessions(sessions);
-      renderRail();
-      renderDayContent();
-      showToast("Rest day saved");
-      syncPush(`Rest day — Week ${state.week} ${day.name}`);
+    box.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const doneStates = Array.from(box.querySelectorAll('input[type="checkbox"]')).map(c => c.checked);
+        const anyChecked = doneStates.some(Boolean);
+
+        if (!anyChecked) {
+          if (currentSession) {
+            sessions = sessions.filter(s => s.id !== currentSession.id);
+            currentSession = null;
+            saveSessions(sessions);
+            renderRail();
+            updateLoggedBadge(false);
+            renderDashboard();
+            syncPush(`Clear rest day — Week ${state.week} ${day.name}`);
+          }
+          return;
+        }
+
+        if (!currentSession) {
+          currentSession = { id: Date.now().toString(), week: state.week, day: day.name };
+          sessions.push(currentSession);
+        }
+        currentSession.date = todayISO();
+        currentSession.phase = phase.key;
+        currentSession.dayTitle = day.title;
+        currentSession.exercises = [];
+        currentSession.rest = true;
+        currentSession.tasksDone = doneStates;
+        saveSessions(sessions);
+        renderRail();
+        updateLoggedBadge(true);
+        renderDashboard();
+        syncPush(`Rest day — Week ${state.week} ${day.name}`);
+      });
     });
-    container.appendChild(btn);
     return;
   }
 
-  // training day: exercise cards
+  // training day: exercise cards, autosave on input
+  let currentSession = existing;
+
   day.exercises.forEach((ex, exIdx) => {
     const card = document.createElement("div");
     card.className = "exercise-card";
 
     const titleRow = document.createElement("div");
     titleRow.className = "exercise-title-row";
-    titleRow.innerHTML = `<span class="exercise-name">${ex.name}</span><span class="exercise-target">${ex.target}</span>`;
+    const muscleColor = MUSCLE_GROUPS[ex.muscle] || "#5C6670";
+    titleRow.innerHTML = `
+      <div class="exercise-name-wrap">
+        <span class="exercise-name">${ex.name}</span>
+        <span class="muscle-chip" style="--chip-color:${muscleColor}">${ex.muscle}</span>
+      </div>
+      <span class="exercise-target">${ex.target}</span>`;
     card.appendChild(titleRow);
 
     const labels = document.createElement("div");
@@ -338,44 +581,53 @@ function renderDayContent() {
     container.appendChild(card);
   });
 
-  const saveBtn = document.createElement("button");
-  saveBtn.className = "save-btn";
-  saveBtn.textContent = existing ? "Update session" : "Save session";
-  saveBtn.addEventListener("click", () => saveTrainingSession(phase, day, existing));
-  container.appendChild(saveBtn);
-}
-
-function saveTrainingSession(phase, day, existing) {
-  const exercises = day.exercises.map((ex, exIdx) => {
-    const sets = [];
-    for (let i = 0; i < ex.sets; i++) {
-      const w = document.querySelector(`input[data-ex="${exIdx}"][data-set="${i}"][data-field="weight"]`).value;
-      const r = document.querySelector(`input[data-ex="${exIdx}"][data-set="${i}"][data-field="reps"]`).value;
-      if (w !== "" || r !== "") {
-        sets.push({ weight: w !== "" ? parseFloat(w) : null, reps: r !== "" ? parseInt(r) : null });
+  const doAutosave = debounce(() => {
+    const exercises = day.exercises.map((ex, exIdx) => {
+      const sets = [];
+      for (let i = 0; i < ex.sets; i++) {
+        const w = container.querySelector(`input[data-ex="${exIdx}"][data-set="${i}"][data-field="weight"]`).value;
+        const r = container.querySelector(`input[data-ex="${exIdx}"][data-set="${i}"][data-field="reps"]`).value;
+        if (w !== "" || r !== "") {
+          sets.push({ weight: w !== "" ? parseFloat(w) : null, reps: r !== "" ? parseInt(r) : null });
+        }
       }
+      return { name: ex.name, target: ex.target, sets };
+    }).filter(e => e.sets.length > 0);
+
+    if (exercises.length === 0) {
+      if (currentSession) {
+        sessions = sessions.filter(s => s.id !== currentSession.id);
+        currentSession = null;
+        saveSessions(sessions);
+        renderRail();
+        updateLoggedBadge(false);
+        renderDashboard();
+        syncPush(`Clear — Week ${state.week} ${day.name}`);
+      }
+      return;
     }
-    return { name: ex.name, target: ex.target, sets };
-  }).filter(e => e.sets.length > 0);
 
-  if (exercises.length === 0) {
-    showToast("Enter at least one set before saving");
-    return;
-  }
+    if (!currentSession) {
+      currentSession = { id: Date.now().toString(), week: state.week, day: day.name };
+      sessions.push(currentSession);
+    }
+    currentSession.date = todayISO();
+    currentSession.phase = phase.key;
+    currentSession.dayTitle = day.title;
+    currentSession.exercises = exercises;
+    currentSession.rest = false;
 
-  const s = existing || { id: Date.now().toString(), week: state.week, day: day.name };
-  s.date = todayISO();
-  s.phase = phase.key;
-  s.dayTitle = day.title;
-  s.exercises = exercises;
-  s.rest = false;
+    saveSessions(sessions);
+    renderRail();
+    updateLoggedBadge(true);
+    showToast("Saved");
+    renderDashboard();
+    syncPush(`${day.title} — Week ${state.week} ${day.name}`);
+  }, 700);
 
-  if (!existing) sessions.push(s);
-  saveSessions(sessions);
-  renderRail();
-  renderDayContent();
-  showToast("Session saved");
-  syncPush(`${day.title} — Week ${state.week} ${day.name}`);
+  container.querySelectorAll(".set-row input").forEach(inp => {
+    inp.addEventListener("input", doAutosave);
+  });
 }
 
 // ---------- PROGRESS ----------
@@ -518,12 +770,14 @@ function renderHistory() {
       renderHistory();
       renderRail();
       renderDayContent();
+      renderDashboard();
       syncPush("Delete session");
     });
   });
 }
 
 // ---------- INIT ----------
+renderDashboard();
 renderRail();
 renderPhaseLabel();
 renderDayStrip();
