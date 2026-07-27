@@ -136,38 +136,104 @@ async function foodSyncPullAndApply() {
 }
 
 // ---------- CALORIE / MACRO CALCULATOR ----------
+function calcBMI(weightKg, heightCm) {
+  const heightM = heightCm / 100;
+  const bmi = weightKg / (heightM * heightM);
+  let category;
+  if (bmi < 18.5) category = "Underweight";
+  else if (bmi < 25) category = "Normal";
+  else if (bmi < 30) category = "Overweight";
+  else category = "Obese";
+  return { bmi: Math.round(bmi * 10) / 10, category };
+}
+
+// 1 kg of body fat ≈ 7700 kcal — standard estimate used to convert a target
+// rate of weight change into a daily calorie surplus/deficit.
+const KCAL_PER_KG = 7700;
+const MIN_SAFE_CALORIES = { male: 1500, female: 1200 };
+
 function calcSuggestedGoals(profile) {
-  const { age, gender, heightCm, weightKg, activity } = profile;
+  const { age, gender, heightCm, weightKg, activity, goalType, targetWeightKg, targetDate } = profile;
   const bmr = gender === "female"
     ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
     : 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
-  const tdee = bmr * parseFloat(activity);
-  const goalCalories = Math.round(tdee);
+  const maintenanceCalories = Math.round(bmr * parseFloat(activity));
+  const { bmi, category } = calcBMI(weightKg, heightCm);
+
+  let goalCalories = maintenanceCalories;
+  let weeklyRateKg = 0;
+  let caution = "";
+
+  if (goalType !== "maintain" && targetWeightKg && targetDate) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const target = new Date(targetDate + "T00:00:00");
+    const weeks = Math.max(1, (target - today) / (1000 * 60 * 60 * 24 * 7));
+    const weightDelta = targetWeightKg - weightKg; // negative for loss, positive for gain
+    weeklyRateKg = weightDelta / weeks;
+    const dailyAdjustment = (weightDelta * KCAL_PER_KG) / (weeks * 7);
+    goalCalories = Math.round(maintenanceCalories + dailyAdjustment);
+
+    const floor = MIN_SAFE_CALORIES[gender] || 1350;
+    if (goalCalories < floor) {
+      goalCalories = floor;
+      caution = `That timeline needs a bigger deficit than is safe — calories floored at ${floor}. Consider a later target date.`;
+    }
+    if (Math.abs(weeklyRateKg) > 1) {
+      caution = caution || `That's a fast rate (${weeklyRateKg.toFixed(2)} kg/week). A common safe guideline is under 1 kg/week.`;
+    }
+  }
+
   const goalProtein = Math.round(weightKg * 1.8);
-  const goalFat = Math.round((tdee * 0.25) / 9);
+  const goalFat = Math.round((goalCalories * 0.25) / 9);
   const proteinCals = goalProtein * 4;
   const fatCals = goalFat * 9;
-  const goalCarb = Math.max(0, Math.round((tdee - proteinCals - fatCals) / 4));
-  return { goalCalories, goalProtein, goalCarb, goalFat };
+  const goalCarb = Math.max(0, Math.round((goalCalories - proteinCals - fatCals) / 4));
+
+  return { goalCalories, goalProtein, goalCarb, goalFat, maintenanceCalories, bmi, category, weeklyRateKg, caution };
 }
 
 // ---------- SETUP FLOW ----------
+document.getElementById("fpGoalType").addEventListener("change", (e) => {
+  document.getElementById("fpTargetFields").style.display = e.target.value === "maintain" ? "none" : "block";
+});
+
 document.getElementById("fpCalcBtn").addEventListener("click", () => {
   const age = parseFloat(document.getElementById("fpAge").value);
   const gender = document.getElementById("fpGender").value;
   const heightCm = parseFloat(document.getElementById("fpHeight").value);
   const weightKg = parseFloat(document.getElementById("fpWeight").value);
   const activity = document.getElementById("fpActivity").value;
+  const goalType = document.getElementById("fpGoalType").value;
+  const targetWeightKg = parseFloat(document.getElementById("fpTargetWeight").value) || null;
+  const targetDate = document.getElementById("fpTargetDate").value || null;
   if (!age || !heightCm || !weightKg) { showToast("Fill in age, height, and weight"); return; }
+  if (goalType !== "maintain" && (!targetWeightKg || !targetDate)) {
+    showToast("Enter a target weight and date, or choose Maintain");
+    return;
+  }
 
-  const goals = calcSuggestedGoals({ age, gender, heightCm, weightKg, activity });
+  const base = { age, gender, heightCm, weightKg, activity, goalType, targetWeightKg, targetDate };
+  const goals = calcSuggestedGoals(base);
+
   document.getElementById("fpGoalCal").value = goals.goalCalories;
   document.getElementById("fpGoalProtein").value = goals.goalProtein;
   document.getElementById("fpGoalCarb").value = goals.goalCarb;
   document.getElementById("fpGoalFat").value = goals.goalFat;
-  document.getElementById("fpGoalsPanel").style.display = "block";
 
-  document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify({ age, gender, heightCm, weightKg, activity });
+  const bmiLine = document.getElementById("bmiLine");
+  bmiLine.innerHTML = `Your BMI is <b>${goals.bmi}</b> (${goals.category}).`;
+
+  const maintenanceLine = document.getElementById("maintenanceLine");
+  let mText = `Maintenance calories (to stay at ${weightKg}kg): <b>${goals.maintenanceCalories} kcal/day</b>.`;
+  if (goalType !== "maintain") {
+    const dir = goalType === "lose" ? "deficit" : "surplus";
+    mText += ` To reach ${targetWeightKg}kg by ${targetDate}, that's roughly a <b>${Math.abs(goals.weeklyRateKg).toFixed(2)} kg/week</b> ${goalType === "lose" ? "loss" : "gain"} — a daily ${dir} bringing you to <b>${goals.goalCalories} kcal/day</b>.`;
+  }
+  if (goals.caution) mText += `<br><br>⚠️ ${goals.caution}`;
+  maintenanceLine.innerHTML = mText;
+
+  document.getElementById("fpGoalsPanel").style.display = "block";
+  document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify({ ...base, maintenanceCalories: goals.maintenanceCalories, bmi: goals.bmi, bmiCategory: goals.category, weeklyRateKg: goals.weeklyRateKg });
 });
 
 document.getElementById("fpSaveBtn").addEventListener("click", () => {
@@ -194,12 +260,20 @@ document.getElementById("foodEditGoalsBtn").addEventListener("click", () => {
   document.getElementById("fpHeight").value = p.heightCm;
   document.getElementById("fpWeight").value = p.weightKg;
   document.getElementById("fpActivity").value = p.activity;
+  document.getElementById("fpGoalType").value = p.goalType || "maintain";
+  document.getElementById("fpTargetFields").style.display = (p.goalType && p.goalType !== "maintain") ? "block" : "none";
+  if (p.targetWeightKg) document.getElementById("fpTargetWeight").value = p.targetWeightKg;
+  if (p.targetDate) document.getElementById("fpTargetDate").value = p.targetDate;
   document.getElementById("fpGoalCal").value = p.goalCalories;
   document.getElementById("fpGoalProtein").value = p.goalProtein;
   document.getElementById("fpGoalCarb").value = p.goalCarb;
   document.getElementById("fpGoalFat").value = p.goalFat;
   document.getElementById("fpGoalsPanel").style.display = "block";
   document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify(p);
+
+  const bmiInfo = calcBMI(p.weightKg, p.heightCm);
+  document.getElementById("bmiLine").innerHTML = `Your BMI is <b>${bmiInfo.bmi}</b> (${bmiInfo.category}).`;
+  document.getElementById("maintenanceLine").innerHTML = `Maintenance calories: <b>${p.maintenanceCalories || "–"} kcal/day</b>.`;
 });
 
 // ---------- MAIN FOOD TAB RENDER ----------
@@ -242,6 +316,19 @@ function renderFoodDaily() {
   });
 
   drawCalorieDial(totals.calories, profile.goalCalories);
+
+  const bmiInfo = calcBMI(profile.weightKg, profile.heightCm);
+  document.getElementById("bmiValueDaily").textContent = bmiInfo.bmi;
+  document.getElementById("bmiCategoryDaily").textContent = bmiInfo.category;
+
+  const goalTypeLabel = profile.goalType === "lose" ? "Losing weight" : profile.goalType === "gain" ? "Gaining weight" : "Maintaining";
+  document.getElementById("goalLabelDaily").textContent = "Goal";
+  document.getElementById("goalValueDaily").textContent = profile.goalCalories + " kcal";
+  let goalSub = goalTypeLabel;
+  if (profile.goalType !== "maintain" && profile.targetWeightKg) {
+    goalSub += ` · target ${profile.targetWeightKg}kg`;
+  }
+  document.getElementById("goalSubDaily").textContent = goalSub;
   drawMacroRing("proteinRing", totals.protein, profile.goalProtein, "#FF6B4A");
   drawMacroRing("carbRing", totals.carbs, profile.goalCarb, "#4A9EFF");
   drawMacroRing("fatRing", totals.fat, profile.goalFat, "#FFC94A");

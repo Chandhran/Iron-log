@@ -738,3 +738,9 @@ select{
 .barcode-video{width:100%;border-radius:10px;margin:10px 0;background:#000;}
 .chart-empty-note{font-size:0.8rem;color:var(--chalk-dim);text-align:center;padding:10px 0;}
 .chart-panel{position:relative;}
+
+.bmi-line, .maintenance-line{
+  font-size:0.85rem; color:var(--chalk-dim); margin-bottom:10px;
+  padding:10px; background:var(--bg-raised); border-radius:8px;
+}
+.bmi-line b, .maintenance-line b{color:var(--chalk);}
