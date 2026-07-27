@@ -1,51 +1,55 @@
-# Iron Log — 16 Week Workout Tracker
+# Iron Log — Training & Nutrition Tracker
 
-A single static site. No build step, no backend. All logs are saved in
-your phone's browser (localStorage) — nothing leaves your device.
+A static site — no backend, no build step. Files run straight from GitHub Pages.
 
-## What it does
-- 16-week rail across the top: odd weeks = Strength, even weeks = Hypertrophy (your two Notion templates, alternating).
-- Tap a week, tap a day, log kg + reps per set. Big number pads, made for typing between sets.
-- **Progress** tab: pick any exercise, see a top-weight line chart and a volume bar chart across every session you've logged.
-- **History** tab: every session you've saved, editable/deletable.
+## Files
+`index.html`, `style.css`, `app.js`, `food.js`, `program-data.js`, `body-diagrams.js`,
+`manifest.json`, plus icon PNGs — all at the repo root.
 
-## Host it free on GitHub Pages
-1. Create a new **public** repo on GitHub, e.g. `iron-log`.
-2. Upload all files in this folder (`index.html`, `style.css`, `app.js`, `program-data.js`, `manifest.json`, `icons/`) to the repo root — either drag-and-drop on github.com or via git.
-3. Go to **Settings → Pages**. Under "Build and deployment", set Source to **Deploy from a branch**, branch **main**, folder **/ (root)**. Save.
-4. Wait ~1 minute. Your site is live at `https://<your-username>.github.io/iron-log/`.
+## Host it on GitHub Pages
+1. Create a public repo, upload all files from this zip to the root.
+2. Settings → Pages → Source: Deploy from a branch → `main` → `/ (root)` → Save.
+3. Visit `https://<username>.github.io/<repo>/` after ~1 minute.
+4. Add to Home Screen on your phone for an app-like icon.
 
-## Add it to your phone as an app (with the logo)
-**iPhone (Safari):**
-1. Open your GitHub Pages link in Safari.
-2. Tap the Share icon → **Add to Home Screen**.
-3. The barbell icon and "Iron Log" name are already set — tap **Add**.
+## Tabs
+- **Train** — 16-week rail (Strength/Hypertrophy alternating), day-by-day set logging
+  that autosaves as you type, live dashboard (clock, streak, this week, weekly muscle
+  calculator, Trained Areas silhouette, training calendar).
+- **Progress** — same dashboard, plus a weight trend graph, a this-week-vs-last-week
+  muscle bar chart, and per-exercise top-weight/volume charts.
+- **Food** — nutrition profile setup (auto-suggests calorie/macro goals from your
+  height/weight/activity via the Mifflin-St Jeor formula, fully editable), daily
+  calorie dial + macro rings, meal sections, daily weight entry, and a full
+  micronutrient panel tracked against real RDA values.
+- **History** — every logged session, with start time and duration, editable/deletable.
+- **Gear icon (top right)** — GitHub sync setup, not a tab.
 
-**Android (Chrome):**
-1. Open the link in Chrome.
-2. Tap the ⋮ menu → **Add to Home screen** (or you'll see an "Install app" prompt automatically, since this is a proper PWA with a manifest).
-3. Confirm — it installs with the icon, opens full-screen with no browser bar.
+## Body diagrams
+Every exercise shows a front/back silhouette with the actual targeted muscle glowing
+in its own color — primary muscle at full strength, secondary/assisting muscles in a
+lighter glow of the same color. The Trained Areas panel aggregates this across a whole
+week (This Week / Last Week toggle).
 
-## Storing entries in GitHub (optional sync)
-By default entries are saved only in this phone's browser. The **Sync** tab lets you
-connect the app to your GitHub repo instead — every save commits an updated
-`data/sessions.json` file to the repo, so your log is versioned, backed up, and
-usable from more than one device.
+## Adding food — three real data sources
+1. **Search** — queries the free USDA FoodData Central database for whole/generic foods.
+2. **Barcode scan** — uses your phone's camera (via the browser's BarcodeDetector API,
+   supported on Chrome/Android; not on iOS Safari) to read a barcode, then looks it up
+   against the free Open Food Facts product database.
+3. **Photo of a nutrition label** — takes a photo, attempts OCR text extraction
+   (via Tesseract.js) of calories/protein/carbs/fat, and always shows you an editable
+   form to correct anything it misread before saving.
+4. **Manual entry** — type it in once, optionally save to **My Foods** for one-tap reuse
+   next time (useful for homemade dishes no database has, like biryani).
 
-To connect:
-1. On GitHub: profile photo → **Settings** → scroll to **Developer settings**.
-2. **Personal access tokens → Fine-grained tokens → Generate new token**.
-3. Repository access: **Only select repositories** → pick your `iron-log` repo.
-4. Permissions → Repository permissions → **Contents: Read and write**.
-5. Generate, copy the token (shown once), and paste it into the Sync tab along
-   with your GitHub username and repo name.
-
-The token is stored only in this browser's localStorage — it's never committed
-to the repo or visible in the site's code. Treat it like a password: anyone with
-it can write to that one repo. If you ever need to revoke it, delete the token
-from GitHub's Developer settings page.
+## Sync (optional, via the gear icon)
+Connect a GitHub fine-grained personal access token (Contents: Read and write, scoped
+to just this one repo) and workouts + weight logs + food logs + My Foods all sync to
+your repo as JSON files, so your data follows you across devices. Without it, everything
+just stays in this browser's local storage.
 
 ## Notes
-- Without Sync connected, data lives only in that specific browser on that specific phone.
-- With Sync connected, saves need an internet connection to reach GitHub's API; if a save fails (no signal), it still saves locally and you can revisit it once you're back online.
-- If you ever want to reset, clearing site data in the browser wipes locally-cached sessions (GitHub copy is unaffected if synced).
+- Micronutrient RDA values are standard adult reference intakes; iron is adjusted by
+  the gender you set in your Food profile (8mg male / 18mg female).
+- USDA search, barcode lookup, and OCR all require an internet connection at the moment
+  you add food — if a lookup fails, Manual entry always works offline.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Iron Log — 16 Week Program</title>
+<title>Iron Log — Training &amp; Nutrition</title>
 <meta name="theme-color" content="#141414">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,13 +16,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="app">
 
-  <!-- HEADER -->
   <header class="topbar">
     <div class="brand">
       <img src="icon-192.png" alt="" class="brand-mark">
@@ -30,51 +30,145 @@
         <span class="brand-name">IRON LOG</span>
         <span class="brand-sub" id="phaseLabel">Week 1 · Strength</span>
       </div>
+      <button class="gear-btn" id="gearBtn" aria-label="Sync settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
     </div>
     <nav class="tabs">
       <button class="tab-btn active" data-view="train">Train</button>
       <button class="tab-btn" data-view="progress">Progress</button>
+      <button class="tab-btn" data-view="food">Food</button>
       <button class="tab-btn" data-view="history">History</button>
-      <button class="tab-btn" data-view="sync">Sync</button>
     </nav>
   </header>
 
-  <!-- DASHBOARD -->
-  <div class="dashboard" id="dashboard"></div>
-
-  <!-- WEEK RAIL (signature element: 16-block program timeline) -->
-  <div class="rail-wrap">
-    <div class="rail" id="weekRail"></div>
-  </div>
-
-  <!-- TRAIN VIEW -->
   <main id="view-train" class="view active">
+    <div class="dashboard" id="dashboard-train"></div>
+    <div class="rail-wrap">
+      <div class="rail" id="weekRail"></div>
+    </div>
     <div class="day-strip" id="dayStrip"></div>
     <div id="dayContent"></div>
   </main>
 
-  <!-- PROGRESS VIEW -->
   <main id="view-progress" class="view">
+    <div class="dashboard" id="dashboard-progress"></div>
+
+    <div class="section-label">Weight trend</div>
+    <div class="panel chart-panel">
+      <canvas id="weightTrendChart" height="180"></canvas>
+      <div id="weightTrendEmpty" class="chart-empty-note" style="display:none;">Log your weight in the Food tab to see this graph.</div>
+    </div>
+
+    <div class="section-label">Sets per muscle group — this week vs last</div>
+    <div class="panel chart-panel">
+      <canvas id="muscleBarChart" height="220"></canvas>
+    </div>
+
+    <div class="section-label">Exercise progress</div>
     <div class="panel">
       <label class="field-label" for="exerciseSelect">Exercise</label>
       <select id="exerciseSelect"></select>
     </div>
     <div class="panel chart-panel">
-      <div class="chart-head">
-        <span class="chart-title">Top weight per session</span>
-      </div>
+      <div class="chart-head"><span class="chart-title">Top weight per session</span></div>
       <canvas id="weightChart" height="180"></canvas>
     </div>
     <div class="panel chart-panel">
-      <div class="chart-head">
-        <span class="chart-title">Total volume (kg × reps)</span>
-      </div>
+      <div class="chart-head"><span class="chart-title">Total volume (kg × reps)</span></div>
       <canvas id="volumeChart" height="180"></canvas>
     </div>
     <div class="panel" id="prBox"></div>
   </main>
 
-  <!-- HISTORY VIEW -->
+  <main id="view-food" class="view">
+    <div id="foodSetup" class="food-setup" style="display:none;">
+      <div class="panel">
+        <div class="chart-title" style="margin-bottom:10px;">Set up your nutrition profile</div>
+        <label class="field-label" for="fpAge">Age</label>
+        <input type="number" id="fpAge" placeholder="e.g. 28">
+        <label class="field-label" for="fpGender">Gender</label>
+        <select id="fpGender">
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+        <label class="field-label" for="fpHeight">Height (cm)</label>
+        <input type="number" id="fpHeight" placeholder="e.g. 175">
+        <label class="field-label" for="fpWeight">Weight (kg)</label>
+        <input type="number" id="fpWeight" step="0.1" placeholder="e.g. 78">
+        <label class="field-label" for="fpActivity">Activity level</label>
+        <select id="fpActivity">
+          <option value="1.2">Sedentary (little/no exercise)</option>
+          <option value="1.375">Light (1-3 days/week)</option>
+          <option value="1.55" selected>Moderate (3-5 days/week)</option>
+          <option value="1.725">Active (6-7 days/week)</option>
+          <option value="1.9">Very active (physical job + training)</option>
+        </select>
+        <button class="save-btn" id="fpCalcBtn" style="margin-top:10px;">Calculate suggested goals</button>
+      </div>
+      <div class="panel" id="fpGoalsPanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:10px;">Your daily goals (editable)</div>
+        <label class="field-label" for="fpGoalCal">Calories (kcal)</label>
+        <input type="number" id="fpGoalCal">
+        <label class="field-label" for="fpGoalProtein">Protein (g)</label>
+        <input type="number" id="fpGoalProtein">
+        <label class="field-label" for="fpGoalCarb">Carbs (g)</label>
+        <input type="number" id="fpGoalCarb">
+        <label class="field-label" for="fpGoalFat">Fat (g)</label>
+        <input type="number" id="fpGoalFat">
+        <button class="save-btn" id="fpSaveBtn" style="margin-top:10px;">Save &amp; start tracking</button>
+      </div>
+    </div>
+
+    <div id="foodDaily" style="display:none;">
+      <div class="food-date-row">
+        <button class="date-nav-btn" id="foodPrevDay">‹</button>
+        <span class="food-date-label" id="foodDateLabel">Today</span>
+        <button class="date-nav-btn" id="foodNextDay">›</button>
+        <button class="date-nav-btn food-edit-goals" id="foodEditGoalsBtn">Goals</button>
+      </div>
+
+      <div class="bento-card food-calorie-card">
+        <canvas id="calorieDial" width="160" height="160"></canvas>
+        <div class="calorie-dial-overlay">
+          <div class="calorie-left-num" id="calorieLeftNum">0</div>
+          <div class="calorie-left-label">kcal left</div>
+        </div>
+      </div>
+
+      <div class="macro-ring-row">
+        <div class="macro-ring-card">
+          <canvas id="proteinRing" width="70" height="70"></canvas>
+          <div class="macro-ring-label">Protein</div>
+          <div class="macro-ring-value" id="proteinRingValue">0/0g</div>
+        </div>
+        <div class="macro-ring-card">
+          <canvas id="carbRing" width="70" height="70"></canvas>
+          <div class="macro-ring-label">Carbs</div>
+          <div class="macro-ring-value" id="carbRingValue">0/0g</div>
+        </div>
+        <div class="macro-ring-card">
+          <canvas id="fatRing" width="70" height="70"></canvas>
+          <div class="macro-ring-label">Fat</div>
+          <div class="macro-ring-value" id="fatRingValue">0/0g</div>
+        </div>
+      </div>
+
+      <div class="panel weight-entry-panel">
+        <label class="field-label" for="dailyWeightInput">Today's weight (kg)</label>
+        <div class="weight-entry-row">
+          <input type="number" id="dailyWeightInput" step="0.1" placeholder="e.g. 77.4">
+          <button class="save-btn weight-save-btn" id="dailyWeightSaveBtn">Log</button>
+        </div>
+      </div>
+
+      <div id="mealSections"></div>
+
+      <div class="section-label">Micronutrients today</div>
+      <div class="panel micro-panel" id="microPanel"></div>
+    </div>
+  </main>
+
   <main id="view-history" class="view">
     <div id="historyList" class="history-list"></div>
     <div class="history-empty" id="historyEmpty" style="display:none;">
@@ -82,38 +176,113 @@
     </div>
   </main>
 
-  <!-- SYNC VIEW -->
-  <main id="view-sync" class="view">
-    <div class="panel">
-      <div class="sync-status" id="syncStatus">Not connected</div>
+</div>
+
+<div class="modal-overlay" id="syncModalOverlay">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Sync to GitHub</span>
+      <button class="modal-close" id="syncModalClose">✕</button>
     </div>
-
-    <div class="panel">
-      <label class="field-label" for="ghOwner">GitHub username</label>
-      <input type="text" id="ghOwner" placeholder="e.g. chandhra">
-      <label class="field-label" for="ghRepo">Repo name</label>
-      <input type="text" id="ghRepo" placeholder="iron-log">
-      <label class="field-label" for="ghToken">Personal access token</label>
-      <input type="password" id="ghToken" placeholder="github_pat_...">
-      <button class="save-btn" id="ghSaveBtn" style="margin-top:10px;">Connect &amp; sync now</button>
+    <div class="modal-body">
+      <div class="panel">
+        <div class="sync-status" id="syncStatus">Not connected</div>
+      </div>
+      <div class="panel">
+        <label class="field-label" for="ghOwner">GitHub username</label>
+        <input type="text" id="ghOwner" placeholder="e.g. chandhra">
+        <label class="field-label" for="ghRepo">Repo name</label>
+        <input type="text" id="ghRepo" placeholder="iron-log">
+        <label class="field-label" for="ghToken">Personal access token</label>
+        <input type="password" id="ghToken" placeholder="github_pat_...">
+        <button class="save-btn" id="ghSaveBtn" style="margin-top:10px;">Connect &amp; sync now</button>
+      </div>
+      <div class="panel sync-help">
+        <div class="chart-title" style="margin-bottom:8px;">How to get a token (2 min)</div>
+        <ol>
+          <li>On GitHub: tap your profile photo → <b>Settings</b>.</li>
+          <li>Scroll down → <b>Developer settings</b>.</li>
+          <li><b>Personal access tokens → Fine-grained tokens → Generate new token</b>.</li>
+          <li>Under "Repository access," choose <b>Only select repositories</b> → pick <b>iron-log</b>.</li>
+          <li>Under "Permissions → Repository permissions," set <b>Contents: Read and write</b>.</li>
+          <li>Generate, then copy the token here. GitHub only shows it once.</li>
+        </ol>
+        <div class="sync-note">This token only controls this one repo. Nothing else on your account is touched. It's stored only in this browser — never uploaded anywhere else.</div>
+      </div>
+      <button class="save-btn secondary-btn" id="ghDisconnectBtn">Disconnect</button>
     </div>
+  </div>
+</div>
 
-    <div class="panel sync-help">
-      <div class="chart-title" style="margin-bottom:8px;">How to get a token (2 min)</div>
-      <ol>
-        <li>On GitHub: tap your profile photo → <b>Settings</b>.</li>
-        <li>Scroll down → <b>Developer settings</b>.</li>
-        <li><b>Personal access tokens → Fine-grained tokens → Generate new token</b>.</li>
-        <li>Under "Repository access," choose <b>Only select repositories</b> → pick <b>iron-log</b>.</li>
-        <li>Under "Permissions → Repository permissions," set <b>Contents: Read and write</b>.</li>
-        <li>Generate, then copy the token here. GitHub only shows it once.</li>
-      </ol>
-      <div class="sync-note">This token only controls this one repo. Nothing else on your account is touched. It's stored only in this browser — never uploaded anywhere else.</div>
+<div class="modal-overlay" id="foodModalOverlay">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">Add food — <span id="foodModalMealLabel">Breakfast</span></span>
+      <button class="modal-close" id="foodModalClose">✕</button>
     </div>
+    <div class="modal-body">
+      <div class="food-mode-tabs">
+        <button class="food-mode-btn active" data-mode="search">Search</button>
+        <button class="food-mode-btn" data-mode="barcode">Barcode</button>
+        <button class="food-mode-btn" data-mode="photo">Photo label</button>
+        <button class="food-mode-btn" data-mode="myfoods">My Foods</button>
+        <button class="food-mode-btn" data-mode="manual">Manual</button>
+      </div>
 
-    <button class="save-btn secondary-btn" id="ghDisconnectBtn">Disconnect</button>
-  </main>
+      <div class="food-mode-panel active" id="mode-search">
+        <input type="text" id="foodSearchInput" placeholder="Search a food, e.g. chicken breast">
+        <button class="save-btn" id="foodSearchBtn">Search</button>
+        <div id="foodSearchResults" class="food-results"></div>
+      </div>
 
+      <div class="food-mode-panel" id="mode-barcode">
+        <button class="save-btn" id="barcodeStartBtn">Start camera scan</button>
+        <video id="barcodeVideo" class="barcode-video" style="display:none;" playsinline></video>
+        <div id="barcodeStatus" class="chart-empty-note"></div>
+      </div>
+
+      <div class="food-mode-panel" id="mode-photo">
+        <input type="file" id="photoLabelInput" accept="image/*" capture="environment">
+        <div id="photoOcrStatus" class="chart-empty-note"></div>
+        <div id="photoOcrForm" style="display:none;">
+          <label class="field-label">Values are per how many grams?</label>
+          <input type="number" id="ocrBaseGrams" value="100">
+          <label class="field-label">Calories (kcal)</label>
+          <input type="number" id="ocrCalories">
+          <label class="field-label">Protein (g)</label>
+          <input type="number" id="ocrProtein">
+          <label class="field-label">Carbs (g)</label>
+          <input type="number" id="ocrCarbs">
+          <label class="field-label">Fat (g)</label>
+          <input type="number" id="ocrFat">
+          <label class="field-label">Grams you're eating now</label>
+          <input type="number" id="ocrGramsEaten" value="100">
+          <button class="save-btn" id="ocrAddBtn">Add to meal</button>
+        </div>
+      </div>
+
+      <div class="food-mode-panel" id="mode-myfoods">
+        <div id="myFoodsList" class="food-results"></div>
+      </div>
+
+      <div class="food-mode-panel" id="mode-manual">
+        <label class="field-label">Food name</label>
+        <input type="text" id="manualName" placeholder="e.g. Chicken biryani">
+        <label class="field-label">Grams</label>
+        <input type="number" id="manualGrams" value="100">
+        <label class="field-label">Calories (kcal, for this amount)</label>
+        <input type="number" id="manualCalories">
+        <label class="field-label">Protein (g)</label>
+        <input type="number" id="manualProtein">
+        <label class="field-label">Carbs (g)</label>
+        <input type="number" id="manualCarbs">
+        <label class="field-label">Fat (g)</label>
+        <input type="number" id="manualFat">
+        <label class="checkbox-row"><input type="checkbox" id="manualSaveToMyFoods" checked> Save to My Foods for reuse</label>
+        <button class="save-btn" id="manualAddBtn">Add to meal</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -121,5 +290,6 @@
 <script src="program-data.js"></script>
 <script src="body-diagrams.js"></script>
 <script src="app.js"></script>
+<script src="food.js"></script>
 </body>
 </html>

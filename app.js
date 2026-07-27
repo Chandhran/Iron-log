@@ -1,87 +1,70 @@
 // ---------- STORAGE ----------
 const SESSIONS_KEY = "ironlog_sessions_v1";
 const STATE_KEY = "ironlog_state_v1";
+const WEIGHT_LOGS_KEY = "ironlog_weight_logs_v1";
 
 function loadSessions() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSIONS_KEY)) || [];
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(SESSIONS_KEY)) || []; } catch { return []; }
 }
 function saveSessions(sessions) {
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 function loadState() {
-  try {
-    return JSON.parse(localStorage.getItem(STATE_KEY)) || { week: 1, dayIndex: 0 };
-  } catch { return { week: 1, dayIndex: 0 }; }
+  try { return JSON.parse(localStorage.getItem(STATE_KEY)) || { week: 1, dayIndex: 0 }; } catch { return { week: 1, dayIndex: 0 }; }
 }
 function saveState(state) {
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
 }
+function loadWeightLogs() {
+  try { return JSON.parse(localStorage.getItem(WEIGHT_LOGS_KEY)) || []; } catch { return []; }
+}
+function saveWeightLogs(logs) {
+  localStorage.setItem(WEIGHT_LOGS_KEY, JSON.stringify(logs));
+}
 
 let sessions = loadSessions();
 let state = loadState();
+let weightLogs = loadWeightLogs();
 
-// ---------- GITHUB SYNC ----------
+// ---------- GITHUB SYNC (shared: workouts here, food data in food.js) ----------
 const SYNC_CONFIG_KEY = "ironlog_sync_config_v1";
 const DATA_PATH = "data/sessions.json";
 
 function loadSyncConfig() {
   try { return JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY)); } catch { return null; }
 }
-function saveSyncConfig(cfg) {
-  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(cfg));
-}
-function clearSyncConfig() {
-  localStorage.removeItem(SYNC_CONFIG_KEY);
-}
+function saveSyncConfig(cfg) { localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(cfg)); }
+function clearSyncConfig() { localStorage.removeItem(SYNC_CONFIG_KEY); }
 
-function ghApiUrl(cfg) {
-  return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${DATA_PATH}`;
+function ghApiUrl(cfg, path) {
+  return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path || DATA_PATH}`;
 }
 function ghHeaders(cfg) {
-  return {
-    "Authorization": `Bearer ${cfg.token}`,
-    "Accept": "application/vnd.github+json",
-  };
+  return { "Authorization": `Bearer ${cfg.token}`, "Accept": "application/vnd.github+json" };
 }
-
-// base64 helpers that handle unicode safely
-function utf8ToB64(str) {
-  return btoa(unescape(encodeURIComponent(str)));
-}
-function b64ToUtf8(str) {
-  return decodeURIComponent(escape(atob(str)));
-}
+function utf8ToB64(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64ToUtf8(str) { return decodeURIComponent(escape(atob(str))); }
 
 async function githubPull() {
   const cfg = loadSyncConfig();
   if (!cfg) return null;
   const res = await fetch(ghApiUrl(cfg), { headers: ghHeaders(cfg) });
-  if (res.status === 404) return { sessions: [], sha: null };
+  if (res.status === 404) return { sessions: [], weightLogs: [], sha: null };
   if (!res.ok) throw new Error(`GitHub read failed (${res.status})`);
   const data = await res.json();
   const content = JSON.parse(b64ToUtf8(data.content));
-  return { sessions: content, sha: data.sha };
+  return { sessions: content.sessions || content, weightLogs: content.weightLogs || [], sha: data.sha };
 }
 
-async function githubPush(sessionsArray, message) {
+async function githubPush(payload, message) {
   const cfg = loadSyncConfig();
   if (!cfg) return;
-  // Get current sha (needed to update an existing file)
   let sha = null;
   const head = await fetch(ghApiUrl(cfg), { headers: ghHeaders(cfg) });
-  if (head.ok) {
-    const headData = await head.json();
-    sha = headData.sha;
-  } else if (head.status !== 404) {
-    throw new Error(`GitHub read failed (${head.status})`);
-  }
+  if (head.ok) { sha = (await head.json()).sha; }
+  else if (head.status !== 404) throw new Error(`GitHub read failed (${head.status})`);
 
-  const body = {
-    message: message || "Update workout log",
-    content: utf8ToB64(JSON.stringify(sessionsArray, null, 2)),
-  };
+  const body = { message: message || "Update workout log", content: utf8ToB64(JSON.stringify(payload, null, 2)) };
   if (sha) body.sha = sha;
 
   const put = await fetch(ghApiUrl(cfg), {
@@ -107,7 +90,7 @@ async function syncPush(message) {
   if (!cfg) return;
   try {
     setSyncStatus("Syncing…", "");
-    await githubPush(sessions, message);
+    await githubPush({ sessions, weightLogs }, message);
     setSyncStatus("Synced just now", "connected");
   } catch (e) {
     setSyncStatus("Sync failed — saved locally only", "error");
@@ -121,27 +104,36 @@ async function syncPullAndApply() {
   try {
     setSyncStatus("Syncing…", "");
     const remote = await githubPull();
-    if (remote && remote.sessions) {
-      sessions = remote.sessions;
-      saveSessions(sessions);
+    if (remote) {
+      if (remote.sessions) { sessions = remote.sessions; saveSessions(sessions); }
+      if (remote.weightLogs) { weightLogs = remote.weightLogs; saveWeightLogs(weightLogs); }
     }
     setSyncStatus(`Connected to ${cfg.owner}/${cfg.repo}`, "connected");
     renderRail();
     renderDayContent();
-    renderDashboard();
+    renderDashboard("dashboard-train");
+    renderDashboard("dashboard-progress");
+    if (typeof foodSyncPullAndApply === "function") foodSyncPullAndApply();
   } catch (e) {
     setSyncStatus("Connected, but last sync failed", "error");
   }
 }
 
 // ---------- HELPERS ----------
-function todayISO() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
+function todayISO() { return new Date().toISOString().slice(0, 10); }
 function formatDate(iso) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+function formatTime(iso) {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+function formatDuration(ms) {
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return "under a minute";
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return `${h}h ${m}m`;
 }
 function findSession(week, dayName) {
   return sessions.find(s => s.week === week && s.day === dayName);
@@ -154,20 +146,20 @@ function showToast(msg) {
   showToast._t = setTimeout(() => t.classList.remove("show"), 1800);
 }
 
-// ---------- NAV TABS ----------
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    document.getElementById("view-" + btn.dataset.view).classList.add("active");
-    if (btn.dataset.view === "progress") renderProgress();
-    if (btn.dataset.view === "history") renderHistory();
-    if (btn.dataset.view === "sync") renderSyncTab();
-  });
+// ---------- MODALS (Sync + Add Food) ----------
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+document.getElementById("gearBtn").addEventListener("click", () => {
+  renderSyncPanel();
+  openModal("syncModalOverlay");
+});
+document.getElementById("syncModalClose").addEventListener("click", () => closeModal("syncModalOverlay"));
+document.getElementById("syncModalOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "syncModalOverlay") closeModal("syncModalOverlay");
 });
 
-function renderSyncTab() {
+function renderSyncPanel() {
   const cfg = loadSyncConfig();
   if (cfg) {
     document.getElementById("ghOwner").value = cfg.owner;
@@ -183,13 +175,9 @@ document.getElementById("ghSaveBtn").addEventListener("click", async () => {
   const owner = document.getElementById("ghOwner").value.trim();
   const repo = document.getElementById("ghRepo").value.trim();
   const token = document.getElementById("ghToken").value.trim();
-  if (!owner || !repo || !token) {
-    showToast("Fill in username, repo, and token");
-    return;
-  }
+  if (!owner || !repo || !token) { showToast("Fill in username, repo, and token"); return; }
   saveSyncConfig({ owner, repo, token });
   await syncPullAndApply();
-  // push current local sessions up in case remote file didn't exist yet
   await syncPush("Initial sync from Iron Log");
   showToast("Connected to GitHub");
 });
@@ -203,12 +191,29 @@ document.getElementById("ghDisconnectBtn").addEventListener("click", () => {
   showToast("Disconnected from GitHub");
 });
 
+// ---------- NAV TABS ----------
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "progress") renderProgressTab();
+    if (btn.dataset.view === "history") renderHistory();
+    if (btn.dataset.view === "food" && typeof renderFoodTab === "function") renderFoodTab();
+  });
+});
+
 // ---------- EXERCISE -> MUSCLE LOOKUP ----------
 const EXERCISE_MUSCLE = {};
+const EXERCISE_SECONDARY = {};
 Object.values(PROGRAM).forEach(phase => {
   phase.days.forEach(day => {
     if (day.type === "training") {
-      day.exercises.forEach(ex => { EXERCISE_MUSCLE[ex.name] = ex.muscle; });
+      day.exercises.forEach(ex => {
+        EXERCISE_MUSCLE[ex.name] = ex.muscle;
+        EXERCISE_SECONDARY[ex.name] = ex.secondary || [];
+      });
     }
   });
 });
@@ -217,8 +222,8 @@ Object.values(PROGRAM).forEach(phase => {
 function parseISO(iso) { return new Date(iso + "T00:00:00"); }
 function getMonday(d) {
   const date = new Date(d);
-  const day = date.getDay(); // 0 = Sunday
-  const diff = (day === 0 ? -6 : 1) - day; // shift to Monday
+  const day = date.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
   date.setDate(date.getDate() + diff);
   date.setHours(0, 0, 0, 0);
   return date;
@@ -226,29 +231,32 @@ function getMonday(d) {
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function sameDay(a, b) { return a.toDateString() === b.toDateString(); }
 
-// ---------- WEEKLY STATS (real, computed from logged sessions) ----------
+// ---------- WEEKLY STATS ----------
 function computeWeekStats(weekStart) {
   const weekEnd = addDays(weekStart, 7);
   const weekSessions = sessions.filter(s => {
     const d = parseISO(s.date);
     return d >= weekStart && d < weekEnd;
   });
-
   const loggedDays = new Set(weekSessions.map(s => s.date)).size;
-
   let volume = 0;
-  const muscleSets = {};
+  const muscleSets = {};       // primary sets count
+  const muscleStrength = {};   // for weekly body diagram: 'primary' | 'secondary'
   weekSessions.filter(s => !s.rest).forEach(s => {
     s.exercises.forEach(ex => {
       const muscle = EXERCISE_MUSCLE[ex.name] || "Full Body";
+      const secondary = EXERCISE_SECONDARY[ex.name] || [];
       ex.sets.forEach(set => {
         volume += (set.weight || 0) * (set.reps || 0);
         muscleSets[muscle] = (muscleSets[muscle] || 0) + 1;
       });
+      if (ex.sets.length > 0) {
+        muscleStrength[muscle] = "primary";
+        secondary.forEach(sm => { if (muscleStrength[sm] !== "primary") muscleStrength[sm] = "secondary"; });
+      }
     });
   });
-
-  return { loggedDays, volume, muscleSets, weekSessions };
+  return { loggedDays, volume, muscleSets, muscleStrength, weekSessions };
 }
 
 function computeStreak() {
@@ -256,7 +264,6 @@ function computeStreak() {
   let cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
   const loggedDates = new Set(sessions.map(s => s.date));
-  // if nothing logged today yet, start counting from yesterday
   if (!loggedDates.has(todayISO())) cursor = addDays(cursor, -1);
   while (loggedDates.has(cursor.toISOString().slice(0, 10))) {
     streak++;
@@ -286,19 +293,21 @@ function computeHeatmap(monthsBack = 3) {
   return months;
 }
 
-// ---------- DASHBOARD RENDER ----------
-let clockInterval;
+// ---------- DASHBOARD RENDER (mounted in both Train and Progress) ----------
+let clockIntervals = {};
+let trainedAreasWeekMode = {}; // per-target 'this'|'last'
 
-function renderDashboard() {
-  const el = document.getElementById("dashboard");
+function renderDashboard(targetId) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
   const monday = getMonday(new Date());
   const prevMonday = addDays(monday, -7);
   const thisWeek = computeWeekStats(monday);
   const lastWeek = computeWeekStats(prevMonday);
   const streak = computeStreak();
   const heatmap = computeHeatmap(3);
+  if (!trainedAreasWeekMode[targetId]) trainedAreasWeekMode[targetId] = "this";
 
-  // ----- day dots for this week (Mon..Sun) -----
   const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
   const weekDotsHtml = dayLetters.map((letter, i) => {
     const d = addDays(monday, i);
@@ -311,7 +320,6 @@ function renderDashboard() {
     </div>`;
   }).join("");
 
-  // ----- muscle group cards: full weekly set calculator, every group shown -----
   const muscleCardsHtml = MUSCLE_ORDER.map(m => {
     const cur = thisWeek.muscleSets[m] || 0;
     const prev = lastWeek.muscleSets[m] || 0;
@@ -331,12 +339,11 @@ function renderDashboard() {
           <span class="muscle-trend ${trendClass}">${trendLabel}</span>
         </div>
         <div class="muscle-card-count">${cur}<span class="muscle-card-unit"> sets</span></div>
-        <div class="muscle-bar-track"><div class="muscle-bar-fill" style="width:${pct}%; background:${color}"></div></div>
+        <div class="muscle-bar-track"><div class="muscle-bar-fill glow-box" style="width:${pct}%; background:${color}; --glow-color:${color};"></div></div>
         <div class="muscle-card-compare">${prev} sets last week</div>
       </div>`;
   }).join("");
 
-  // ----- monthly heatmap -----
   const heatmapHtml = heatmap.map(month => `
     <div class="heat-month">
       <div class="heat-month-label">${month.label}</div>
@@ -346,12 +353,15 @@ function renderDashboard() {
     </div>
   `).join("");
 
+  const activeStats = trainedAreasWeekMode[targetId] === "this" ? thisWeek : lastWeek;
+  const diagrams = weeklyBodyDiagrams(activeStats.muscleStrength);
+
   el.innerHTML = `
     <div class="bento-row">
       <div class="bento-card bento-clock">
-        <div class="bento-label" id="clockDay">–</div>
-        <div class="bento-big" id="clockTime">--:--</div>
-        <div class="bento-sub" id="clockDate">–</div>
+        <div class="bento-label" id="clockDay-${targetId}">–</div>
+        <div class="bento-big" id="clockTime-${targetId}">--:--</div>
+        <div class="bento-sub" id="clockDate-${targetId}">–</div>
       </div>
       <div class="bento-card bento-streak">
         <div class="bento-label">Streak</div>
@@ -369,29 +379,55 @@ function renderDashboard() {
     <div class="section-label">Weekly sets per muscle group</div>
     <div class="muscle-card-row">${muscleCardsHtml}</div>
 
+    <div class="section-label">Trained areas</div>
+    <div class="trained-areas-card">
+      <div class="trained-areas-head">
+        <span class="bento-sub" style="margin:0;">Muscles worked</span>
+        <div class="trained-toggle">
+          <button class="trained-toggle-btn ${trainedAreasWeekMode[targetId] === "this" ? "active" : ""}" data-mode="this" data-target="${targetId}">This Week</button>
+          <button class="trained-toggle-btn ${trainedAreasWeekMode[targetId] === "last" ? "active" : ""}" data-mode="last" data-target="${targetId}">Last Week</button>
+        </div>
+      </div>
+      <div class="trained-body-row">
+        <div class="trained-body-col">${diagrams.front}<span class="trained-body-col-label">Front</span></div>
+        <div class="trained-body-col">${diagrams.back}<span class="trained-body-col-label">Back</span></div>
+      </div>
+      <div class="trained-legend">
+        <span><span class="trained-legend-dot" style="background:var(--accent-orange);"></span>Primary</span>
+        <span><span class="trained-legend-dot" style="background:#FFB09C;"></span>Secondary</span>
+      </div>
+    </div>
+
     <div class="section-label">Training calendar</div>
     <div class="bento-card heat-panel">
       <div class="heat-row">${heatmapHtml}</div>
     </div>
   `;
 
-  startClock();
+  el.querySelectorAll(".trained-toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      trainedAreasWeekMode[btn.dataset.target] = btn.dataset.mode;
+      renderDashboard(btn.dataset.target);
+    });
+  });
+
+  startClock(targetId);
 }
 
-function startClock() {
-  if (clockInterval) clearInterval(clockInterval);
+function startClock(targetId) {
+  if (clockIntervals[targetId]) clearInterval(clockIntervals[targetId]);
   const update = () => {
     const now = new Date();
-    const dayEl = document.getElementById("clockDay");
-    const timeEl = document.getElementById("clockTime");
-    const dateEl = document.getElementById("clockDate");
-    if (!dayEl) return; // dashboard not mounted (different tab)
+    const dayEl = document.getElementById(`clockDay-${targetId}`);
+    const timeEl = document.getElementById(`clockTime-${targetId}`);
+    const dateEl = document.getElementById(`clockDate-${targetId}`);
+    if (!dayEl) return;
     dayEl.textContent = now.toLocaleDateString(undefined, { weekday: "long" });
     timeEl.textContent = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     dateEl.textContent = now.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
   };
   update();
-  clockInterval = setInterval(update, 15000);
+  clockIntervals[targetId] = setInterval(update, 15000);
 }
 
 // ---------- WEEK RAIL ----------
@@ -447,20 +483,27 @@ function renderDayStrip() {
 // ---------- DAY CONTENT ----------
 function debounce(fn, delay) {
   let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), delay);
-  };
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
 }
 
 function updateLoggedBadge(logged) {
   const header = document.getElementById("dayHeaderTitle");
   if (!header) return;
   const existingBadge = header.querySelector(".logged-badge");
-  if (logged && !existingBadge) {
-    header.insertAdjacentHTML("beforeend", '<span class="logged-badge">Logged</span>');
-  } else if (!logged && existingBadge) {
-    existingBadge.remove();
+  if (logged && !existingBadge) header.insertAdjacentHTML("beforeend", '<span class="logged-badge">Logged</span>');
+  else if (!logged && existingBadge) existingBadge.remove();
+}
+
+function renderTimingLine(session) {
+  const el = document.getElementById("dayTimingLine");
+  if (!el) return;
+  if (!session || !session.startTime) { el.textContent = ""; return; }
+  const start = formatTime(session.startTime);
+  if (session.endTime && session.endTime !== session.startTime) {
+    const dur = new Date(session.endTime) - new Date(session.startTime);
+    el.textContent = `Started ${start} · ${formatDuration(dur)}`;
+  } else {
+    el.textContent = `Started ${start}`;
   }
 }
 
@@ -475,8 +518,10 @@ function renderDayContent() {
   const header = document.createElement("div");
   header.className = "day-header";
   header.innerHTML = `<h2 id="dayHeaderTitle">${day.title}${existing ? '<span class="logged-badge">Logged</span>' : ""}</h2>
-    <div class="day-meta">${day.name} · Week ${state.week} · saves automatically as you type</div>`;
+    <div class="day-meta">${day.name} · Week ${state.week} · saves automatically as you type</div>
+    <div class="day-timing" id="dayTimingLine"></div>`;
   container.appendChild(header);
+  renderTimingLine(existing);
 
   if (day.type === "rest") {
     let currentSession = existing;
@@ -500,6 +545,7 @@ function renderDayContent() {
       cb.addEventListener("change", () => {
         const doneStates = Array.from(box.querySelectorAll('input[type="checkbox"]')).map(c => c.checked);
         const anyChecked = doneStates.some(Boolean);
+        const nowISO = new Date().toISOString();
 
         if (!anyChecked) {
           if (currentSession) {
@@ -508,14 +554,16 @@ function renderDayContent() {
             saveSessions(sessions);
             renderRail();
             updateLoggedBadge(false);
-            renderDashboard();
+            renderTimingLine(null);
+            renderDashboard("dashboard-train");
+            renderDashboard("dashboard-progress");
             syncPush(`Clear rest day — Week ${state.week} ${day.name}`);
           }
           return;
         }
 
         if (!currentSession) {
-          currentSession = { id: Date.now().toString(), week: state.week, day: day.name };
+          currentSession = { id: Date.now().toString(), week: state.week, day: day.name, startTime: nowISO };
           sessions.push(currentSession);
         }
         currentSession.date = todayISO();
@@ -524,17 +572,20 @@ function renderDayContent() {
         currentSession.exercises = [];
         currentSession.rest = true;
         currentSession.tasksDone = doneStates;
+        currentSession.endTime = nowISO;
+        if (!currentSession.startTime) currentSession.startTime = nowISO;
         saveSessions(sessions);
         renderRail();
         updateLoggedBadge(true);
-        renderDashboard();
+        renderTimingLine(currentSession);
+        renderDashboard("dashboard-train");
+        renderDashboard("dashboard-progress");
         syncPush(`Rest day — Week ${state.week} ${day.name}`);
       });
     });
     return;
   }
 
-  // training day: exercise cards, autosave on input
   let currentSession = existing;
 
   day.exercises.forEach((ex, exIdx) => {
@@ -545,13 +596,20 @@ function renderDayContent() {
     titleRow.className = "exercise-title-row";
     const muscleColor = (MUSCLE_INFO[ex.muscle] && MUSCLE_INFO[ex.muscle].color) || "#5C6670";
     const viewLabel = (MUSCLE_INFO[ex.muscle] && MUSCLE_INFO[ex.muscle].view) === "back" ? "Back view" : "Front view";
+    const secondary = ex.secondary || [];
+    const secondaryChips = secondary.map(sm => {
+      const c = (MUSCLE_INFO[sm] && MUSCLE_INFO[sm].light) || "#5C6670";
+      return `<span class="secondary-chip" style="--chip-color:${c}">${sm}</span>`;
+    }).join("");
+
     titleRow.innerHTML = `
-      <div class="exercise-diagram" style="--chip-color:${muscleColor}">
-        ${bodyDiagramFor(ex.muscle)}
+      <div class="exercise-diagram">
+        ${bodyDiagramFor(ex.muscle, secondary)}
       </div>
       <div class="exercise-name-wrap">
         <span class="exercise-name">${ex.name}</span>
-        <span class="muscle-chip" style="--chip-color:${muscleColor}">${ex.muscle}</span>
+        <span class="muscle-chip glow" style="--chip-color:${muscleColor}; color:${muscleColor};">${ex.muscle}</span>
+        ${secondaryChips ? `<div class="secondary-chip-row">${secondaryChips}</div>` : ""}
         <span class="view-label">${viewLabel}</span>
       </div>
       <span class="exercise-target">${ex.target}</span>`;
@@ -599,6 +657,8 @@ function renderDayContent() {
       return { name: ex.name, target: ex.target, sets };
     }).filter(e => e.sets.length > 0);
 
+    const nowISO = new Date().toISOString();
+
     if (exercises.length === 0) {
       if (currentSession) {
         sessions = sessions.filter(s => s.id !== currentSession.id);
@@ -606,16 +666,20 @@ function renderDayContent() {
         saveSessions(sessions);
         renderRail();
         updateLoggedBadge(false);
-        renderDashboard();
+        renderTimingLine(null);
+        renderDashboard("dashboard-train");
+        renderDashboard("dashboard-progress");
         syncPush(`Clear — Week ${state.week} ${day.name}`);
       }
       return;
     }
 
     if (!currentSession) {
-      currentSession = { id: Date.now().toString(), week: state.week, day: day.name };
+      currentSession = { id: Date.now().toString(), week: state.week, day: day.name, startTime: nowISO };
       sessions.push(currentSession);
     }
+    if (!currentSession.startTime) currentSession.startTime = nowISO;
+    currentSession.endTime = nowISO;
     currentSession.date = todayISO();
     currentSession.phase = phase.key;
     currentSession.dayTitle = day.title;
@@ -625,8 +689,10 @@ function renderDayContent() {
     saveSessions(sessions);
     renderRail();
     updateLoggedBadge(true);
+    renderTimingLine(currentSession);
     showToast("Saved");
-    renderDashboard();
+    renderDashboard("dashboard-train");
+    renderDashboard("dashboard-progress");
     syncPush(`${day.title} — Week ${state.week} ${day.name}`);
   }, 700);
 
@@ -635,26 +701,27 @@ function renderDayContent() {
   });
 }
 
-// ---------- PROGRESS ----------
+// ---------- PROGRESS TAB ----------
 function allExerciseNames() {
   const names = new Set();
   Object.values(PROGRAM).forEach(phase => {
-    phase.days.forEach(day => {
-      if (day.type === "training") day.exercises.forEach(ex => names.add(ex.name));
-    });
+    phase.days.forEach(day => { if (day.type === "training") day.exercises.forEach(ex => names.add(ex.name)); });
   });
   return Array.from(names).sort();
 }
 
-let weightChart, volumeChart;
+let weightChart, volumeChart, weightTrendChart, muscleBarChart;
 
-function renderProgress() {
+function renderProgressTab() {
+  renderDashboard("dashboard-progress");
+  renderWeightTrendChart();
+  renderMuscleBarChart();
+
   const select = document.getElementById("exerciseSelect");
   if (!select.dataset.filled) {
     allExerciseNames().forEach(name => {
       const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
+      opt.value = name; opt.textContent = name;
       select.appendChild(opt);
     });
     select.dataset.filled = "1";
@@ -664,35 +731,8 @@ function renderProgress() {
   else if (select.options.length) drawExerciseCharts(select.options[0].value);
 }
 
-function drawExerciseCharts(exerciseName) {
-  const points = [];
-  sessions
-    .filter(s => !s.rest)
-    .sort((a, b) => (a.id > b.id ? 1 : -1))
-    .forEach(s => {
-      const ex = s.exercises.find(e => e.name === exerciseName);
-      if (!ex) return;
-      const weights = ex.sets.map(x => x.weight).filter(w => w != null);
-      const volume = ex.sets.reduce((sum, x) => sum + ((x.weight || 0) * (x.reps || 0)), 0);
-      points.push({
-        date: s.date,
-        week: s.week,
-        topWeight: weights.length ? Math.max(...weights) : null,
-        volume: volume,
-      });
-    });
-
-  const labels = points.map(p => `W${p.week} · ${formatDate(p.date)}`);
-  const weightData = points.map(p => p.topWeight);
-  const volumeData = points.map(p => p.volume);
-
-  const ctxW = document.getElementById("weightChart");
-  const ctxV = document.getElementById("volumeChart");
-
-  if (weightChart) weightChart.destroy();
-  if (volumeChart) volumeChart.destroy();
-
-  const commonOpts = {
+function chartCommonOpts() {
+  return {
     responsive: true,
     plugins: { legend: { display: false } },
     scales: {
@@ -700,22 +740,91 @@ function drawExerciseCharts(exerciseName) {
       y: { ticks: { color: "#9b9890" }, grid: { color: "#2e2e2e" }, beginAtZero: true }
     }
   };
+}
+
+function renderWeightTrendChart() {
+  const canvas = document.getElementById("weightTrendChart");
+  const emptyNote = document.getElementById("weightTrendEmpty");
+  const sorted = [...weightLogs].sort((a, b) => a.date < b.date ? -1 : 1);
+  if (weightTrendChart) weightTrendChart.destroy();
+  if (sorted.length === 0) {
+    canvas.style.display = "none";
+    emptyNote.style.display = "block";
+    return;
+  }
+  canvas.style.display = "block";
+  emptyNote.style.display = "none";
+  const labels = sorted.map(w => formatDate(w.date));
+  const data = sorted.map(w => w.weightKg);
+  weightTrendChart = new Chart(canvas, {
+    type: "line",
+    data: { labels, datasets: [{
+      data, borderColor: "#4A9EFF", backgroundColor: "rgba(74,158,255,0.15)",
+      pointBackgroundColor: "#4A9EFF", tension: 0.3, fill: true, spanGaps: true,
+    }]},
+    options: chartCommonOpts()
+  });
+}
+
+function renderMuscleBarChart() {
+  const canvas = document.getElementById("muscleBarChart");
+  const monday = getMonday(new Date());
+  const prevMonday = addDays(monday, -7);
+  const thisWeek = computeWeekStats(monday);
+  const lastWeek = computeWeekStats(prevMonday);
+  const labels = MUSCLE_ORDER.map(m => m.length > 12 ? m.split(" ")[0] : m);
+  const thisData = MUSCLE_ORDER.map(m => thisWeek.muscleSets[m] || 0);
+  const lastData = MUSCLE_ORDER.map(m => lastWeek.muscleSets[m] || 0);
+
+  if (muscleBarChart) muscleBarChart.destroy();
+  muscleBarChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "This week", data: thisData, backgroundColor: "#D4551F" },
+        { label: "Last week", data: lastData, backgroundColor: "#5C6670" },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, labels: { color: "#9b9890", font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: "#9b9890", font: { size: 9 } }, grid: { display: false } },
+        y: { ticks: { color: "#9b9890" }, grid: { color: "#2e2e2e" }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function drawExerciseCharts(exerciseName) {
+  const points = [];
+  sessions.filter(s => !s.rest).sort((a, b) => (a.id > b.id ? 1 : -1)).forEach(s => {
+    const ex = s.exercises.find(e => e.name === exerciseName);
+    if (!ex) return;
+    const weights = ex.sets.map(x => x.weight).filter(w => w != null);
+    const volume = ex.sets.reduce((sum, x) => sum + ((x.weight || 0) * (x.reps || 0)), 0);
+    points.push({ date: s.date, week: s.week, topWeight: weights.length ? Math.max(...weights) : null, volume });
+  });
+
+  const labels = points.map(p => `W${p.week} · ${formatDate(p.date)}`);
+  const weightData = points.map(p => p.topWeight);
+  const volumeData = points.map(p => p.volume);
+
+  const ctxW = document.getElementById("weightChart");
+  const ctxV = document.getElementById("volumeChart");
+  if (weightChart) weightChart.destroy();
+  if (volumeChart) volumeChart.destroy();
 
   weightChart = new Chart(ctxW, {
     type: "line",
-    data: { labels, datasets: [{
-      data: weightData, borderColor: "#D4551F", backgroundColor: "rgba(181,70,27,0.15)",
-      pointBackgroundColor: "#D4551F", tension: 0.25, fill: true, spanGaps: true,
-    }]},
-    options: commonOpts
+    data: { labels, datasets: [{ data: weightData, borderColor: "#D4551F", backgroundColor: "rgba(181,70,27,0.15)", pointBackgroundColor: "#D4551F", tension: 0.25, fill: true, spanGaps: true }]},
+    options: chartCommonOpts()
   });
-
   volumeChart = new Chart(ctxV, {
     type: "bar",
-    data: { labels, datasets: [{
-      data: volumeData, backgroundColor: "#5C6670",
-    }]},
-    options: commonOpts
+    data: { labels, datasets: [{ data: volumeData, backgroundColor: "#5C6670" }]},
+    options: chartCommonOpts()
   });
 
   const prBox = document.getElementById("prBox");
@@ -738,7 +847,6 @@ function renderHistory() {
   const list = document.getElementById("historyList");
   const empty = document.getElementById("historyEmpty");
   list.innerHTML = "";
-
   const sorted = [...sessions].sort((a, b) => (a.id < b.id ? 1 : -1));
   empty.style.display = sorted.length ? "none" : "block";
 
@@ -746,6 +854,14 @@ function renderHistory() {
     const card = document.createElement("div");
     card.className = "history-card";
     const phaseLabel = s.phase === "strength" ? "Strength" : "Hypertrophy";
+
+    let timingStr = "";
+    if (s.startTime) {
+      timingStr = `Started ${formatTime(s.startTime)}`;
+      if (s.endTime && s.endTime !== s.startTime) {
+        timingStr += ` · ${formatDuration(new Date(s.endTime) - new Date(s.startTime))}`;
+      }
+    }
 
     let body = "";
     if (s.rest) {
@@ -762,6 +878,7 @@ function renderHistory() {
         <span class="history-date">${formatDate(s.date)} · ${s.day}</span>
         <span class="history-tag">Wk ${s.week} · ${phaseLabel}</span>
       </div>
+      ${timingStr ? `<div class="history-ex" style="color:var(--accent-cyan);">${timingStr}</div>` : ""}
       ${body}
       <button class="history-del" data-id="${s.id}">Delete session</button>
     `;
@@ -775,14 +892,15 @@ function renderHistory() {
       renderHistory();
       renderRail();
       renderDayContent();
-      renderDashboard();
+      renderDashboard("dashboard-train");
+      renderDashboard("dashboard-progress");
       syncPush("Delete session");
     });
   });
 }
 
 // ---------- INIT ----------
-renderDashboard();
+renderDashboard("dashboard-train");
 renderRail();
 renderPhaseLabel();
 renderDayStrip();

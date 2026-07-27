@@ -1,102 +1,150 @@
-// Simple schematic front/back body silhouette. Every muscle region is a real,
-// separately addressable shape — the highlighted one lights up in the muscle's
-// color, everything else stays a dim base tone so the diagram always shows an
-// accurate figure, never a decorative stand-in.
+// Anatomical front/back body silhouette generator.
+// Every muscle is a real, separately addressable shape. The primary muscle for
+// an exercise glows in its full color; secondary/assisting muscles glow in a
+// lighter shade of the same palette. Everything else stays a dim outline so
+// the diagram always reads as an accurate figure.
 
-const BODY_BASE = "#33383d";
-const BODY_STROKE = "#464b50";
+const BODY_LINE = "#3a3f45";      // resting outline stroke
+const BODY_FILL_DIM = "#232629";  // resting fill (untouched muscle)
 
-function regionFill(region, activeRegion, activeColor) {
-  return region === activeRegion ? activeColor : BODY_BASE;
-}
-
-function frontBodySVG(activeRegion, activeColor) {
-  const f = (r) => regionFill(r, activeRegion, activeColor);
+function glowFilterDefs(idSuffix) {
   return `
-<svg viewBox="0 0 100 200" class="body-svg" xmlns="http://www.w3.org/2000/svg">
-  <!-- head -->
-  <ellipse cx="50" cy="13" rx="9" ry="10" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- neck -->
-  <rect x="45" y="21" width="10" height="8" rx="2" fill="${f('neck')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- shoulders / anterior+lateral delts -->
-  <circle cx="27" cy="38" r="8" fill="${f('delt')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <circle cx="73" cy="38" r="8" fill="${f('delt')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- chest -->
-  <rect x="33" y="36" width="34" height="22" rx="7" fill="${f('chest')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- abs -->
-  <rect x="38" y="60" width="24" height="26" rx="4" fill="${f('abs')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- biceps -->
-  <rect x="15" y="41" width="9" height="27" rx="4" fill="${f('biceps')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="76" y="41" width="9" height="27" rx="4" fill="${f('biceps')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- forearms (context only, not a tracked region) -->
-  <rect x="14" y="70" width="8" height="22" rx="3" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="78" y="70" width="8" height="22" rx="3" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- adductors -->
-  <rect x="42" y="102" width="16" height="22" rx="4" fill="${f('adductors')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- quads -->
-  <rect x="29" y="98" width="14" height="42" rx="5" fill="${f('quads')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="57" y="98" width="14" height="42" rx="5" fill="${f('quads')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- tibialis -->
-  <rect x="30" y="148" width="12" height="32" rx="4" fill="${f('tibialis')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="58" y="148" width="12" height="32" rx="4" fill="${f('tibialis')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- feet (context) -->
-  <ellipse cx="36" cy="185" rx="7" ry="4" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <ellipse cx="64" cy="185" rx="7" ry="4" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-</svg>`;
+    <filter id="glowStrong${idSuffix}" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.2" result="blur1"/>
+      <feMerge>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glowSoft${idSuffix}" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.4" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  `;
 }
 
-function backBodySVG(activeRegion, activeColor) {
-  const f = (r) => regionFill(r, activeRegion, activeColor);
-  return `
-<svg viewBox="0 0 100 200" class="body-svg" xmlns="http://www.w3.org/2000/svg">
-  <!-- head -->
-  <ellipse cx="50" cy="13" rx="9" ry="10" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- neck -->
-  <rect x="45" y="21" width="10" height="8" rx="2" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- posterior delts -->
-  <circle cx="27" cy="38" r="8" fill="${f('delt-rear')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <circle cx="73" cy="38" r="8" fill="${f('delt-rear')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- traps -->
-  <path d="M 38 34 L 62 34 L 56 50 L 44 50 Z" fill="${f('traps')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- rhomboids -->
-  <rect x="44" y="48" width="12" height="15" rx="3" fill="${f('rhomboids')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- lats -->
-  <rect x="30" y="50" width="15" height="28" rx="5" fill="${f('lats')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="55" y="50" width="15" height="28" rx="5" fill="${f('lats')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- triceps -->
-  <rect x="15" y="41" width="9" height="27" rx="4" fill="${f('triceps')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="76" y="41" width="9" height="27" rx="4" fill="${f('triceps')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- forearms (context) -->
-  <rect x="14" y="70" width="8" height="22" rx="3" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="78" y="70" width="8" height="22" rx="3" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- erector spinae -->
-  <rect x="42" y="78" width="16" height="22" rx="4" fill="${f('erectors')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- glutes -->
-  <rect x="33" y="100" width="34" height="18" rx="8" fill="${f('glutes')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- hamstrings -->
-  <rect x="29" y="118" width="14" height="34" rx="5" fill="${f('hamstrings')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="57" y="118" width="14" height="34" rx="5" fill="${f('hamstrings')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- calves -->
-  <rect x="30" y="153" width="12" height="27" rx="4" fill="${f('calves')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <rect x="58" y="153" width="12" height="27" rx="4" fill="${f('calves')}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <!-- feet (context) -->
-  <ellipse cx="36" cy="185" rx="7" ry="4" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-  <ellipse cx="64" cy="185" rx="7" ry="4" fill="${BODY_BASE}" stroke="${BODY_STROKE}" stroke-width="0.6"/>
-</svg>`;
+function shapeAttrsFront() {
+  return {
+    neck:        `<rect x="45" y="21" width="10" height="9" rx="2"/>`,
+    delt:        `<circle cx="26" cy="39" r="8.5"/><circle cx="74" cy="39" r="8.5"/>`,
+    chest:       `<path d="M 33 36 Q 50 33 67 36 L 67 52 Q 50 60 33 52 Z"/>`,
+    biceps:      `<rect x="14" y="41" width="9.5" height="28" rx="4.5"/><rect x="76.5" y="41" width="9.5" height="28" rx="4.5"/>`,
+    forearm:     `<rect x="13" y="71" width="8" height="23" rx="3"/><rect x="79" y="71" width="8" height="23" rx="3"/>`,
+    abs:         `<rect x="40" y="60" width="20" height="10" rx="3"/><rect x="40" y="71" width="20" height="10" rx="3"/><rect x="40" y="82" width="20" height="10" rx="3"/>`,
+    obliques:    `<rect x="33" y="63" width="6" height="26" rx="3"/><rect x="61" y="63" width="6" height="26" rx="3"/>`,
+    adductors:   `<path d="M 42 104 Q 50 100 58 104 L 58 124 Q 50 130 42 124 Z"/>`,
+    quads:       `<path d="M 28 100 Q 36 96 44 100 L 43 141 Q 36 146 29 141 Z"/><path d="M 56 100 Q 64 96 72 100 L 71 141 Q 64 146 57 141 Z"/>`,
+    tibialis:    `<rect x="30" y="150" width="12" height="32" rx="4"/><rect x="58" y="150" width="12" height="32" rx="4"/>`,
+  };
 }
 
-// Full-body highlight (used for compound/full-body tagged movements)
-function fullBodySVG(activeColor) {
-  return frontBodySVG("__all__", activeColor).replace(
-    new RegExp(BODY_BASE, "g"), activeColor
-  );
+function shapeAttrsBack() {
+  return {
+    "delt-rear": `<circle cx="26" cy="39" r="8.5"/><circle cx="74" cy="39" r="8.5"/>`,
+    traps:       `<path d="M 37 34 L 63 34 L 55 52 L 45 52 Z"/>`,
+    rhomboids:   `<rect x="44" y="48" width="12" height="15" rx="3"/>`,
+    lats:        `<path d="M 29 50 Q 27 66 32 79 L 44 74 L 44 52 Z"/><path d="M 71 50 Q 73 66 68 79 L 56 74 L 56 52 Z"/>`,
+    triceps:     `<rect x="14" y="41" width="9.5" height="28" rx="4.5"/><rect x="76.5" y="41" width="9.5" height="28" rx="4.5"/>`,
+    forearm:     `<rect x="13" y="71" width="8" height="23" rx="3"/><rect x="79" y="71" width="8" height="23" rx="3"/>`,
+    erectors:    `<rect x="43" y="78" width="14" height="23" rx="4"/>`,
+    glutes:      `<path d="M 32 100 Q 50 96 68 100 L 66 120 Q 50 126 34 120 Z"/>`,
+    hamstrings:  `<path d="M 29 120 Q 36 117 43 120 L 43 155 Q 36 160 29 155 Z"/><path d="M 57 120 Q 64 117 71 120 L 71 155 Q 64 160 57 155 Z"/>`,
+    calves:      `<rect x="30" y="156" width="12" height="27" rx="4"/><rect x="58" y="156" width="12" height="27" rx="4"/>`,
+  };
 }
 
-function bodyDiagramFor(muscleName) {
-  const info = MUSCLE_INFO[muscleName];
+const FRONT_ALL_REGIONS = ["neck","delt","chest","biceps","forearm","abs","obliques","adductors","quads","tibialis"];
+const BACK_ALL_REGIONS = ["delt-rear","traps","rhomboids","lats","triceps","forearm","erectors","glutes","hamstrings","calves"];
+
+function renderRegions(shapes, allRegions, highlightMap, filterSuffix) {
+  return allRegions.map(region => {
+    const svgFragment = shapes[region];
+    if (!svgFragment) return "";
+    const hl = highlightMap[region];
+    if (!hl) {
+      return `<g fill="${BODY_FILL_DIM}" stroke="${BODY_LINE}" stroke-width="0.6">${svgFragment}</g>`;
+    }
+    const filterId = hl.strength === "strong" ? `glowStrong${filterSuffix}` : `glowSoft${filterSuffix}`;
+    return `<g fill="${hl.color}" stroke="${hl.color}" stroke-width="0.5" filter="url(#${filterId})">${svgFragment}</g>`;
+  }).join("");
+}
+
+function baseFigureChrome() {
+  return {
+    head: `<ellipse cx="50" cy="13" rx="9" ry="10" fill="${BODY_FILL_DIM}" stroke="${BODY_LINE}" stroke-width="0.6"/>`,
+    feet: `<ellipse cx="35" cy="187" rx="7" ry="4" fill="${BODY_FILL_DIM}" stroke="${BODY_LINE}" stroke-width="0.6"/><ellipse cx="65" cy="187" rx="7" ry="4" fill="${BODY_FILL_DIM}" stroke="${BODY_LINE}" stroke-width="0.6"/>`,
+  };
+}
+
+function svgWrap(innerContent, filterSuffix) {
+  const chrome = baseFigureChrome();
+  return `<svg viewBox="0 0 100 210" class="body-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>${glowFilterDefs(filterSuffix)}</defs>
+    ${chrome.head}
+    ${innerContent}
+    ${chrome.feet}
+  </svg>`;
+}
+
+function frontSVG(highlightMap, filterSuffix = "F") {
+  return svgWrap(renderRegions(shapeAttrsFront(), FRONT_ALL_REGIONS, highlightMap, filterSuffix), filterSuffix);
+}
+function backSVG(highlightMap, filterSuffix = "B") {
+  return svgWrap(renderRegions(shapeAttrsBack(), BACK_ALL_REGIONS, highlightMap, filterSuffix), filterSuffix);
+}
+
+function buildHighlightMaps(primaryMuscle, secondaryMuscles = []) {
+  const front = {};
+  const back = {};
+  const primaryInfo = MUSCLE_INFO[primaryMuscle];
+  if (primaryInfo) {
+    const target = primaryInfo.view === "back" ? back : front;
+    target[primaryInfo.region] = { color: primaryInfo.color, strength: "strong" };
+  }
+  secondaryMuscles.forEach(m => {
+    const info = MUSCLE_INFO[m];
+    if (!info) return;
+    const target = info.view === "back" ? back : front;
+    if (!target[info.region]) {
+      target[info.region] = { color: info.light, strength: "soft" };
+    }
+  });
+  return { front, back };
+}
+
+function bodyDiagramFor(primaryMuscle, secondaryMuscles = []) {
+  const info = MUSCLE_INFO[primaryMuscle];
   if (!info) return "";
-  if (info.region === "fullbody") return fullBodySVG(info.color);
-  return info.view === "back"
-    ? backBodySVG(info.region, info.color)
-    : frontBodySVG(info.region, info.color);
+  const { front, back } = buildHighlightMaps(primaryMuscle, secondaryMuscles);
+  const suffix = Math.random().toString(36).slice(2, 8);
+  if (info.region === "fullbody") {
+    const allFront = {};
+    FRONT_ALL_REGIONS.forEach(r => { allFront[r] = { color: info.color, strength: "soft" }; });
+    return frontSVG(allFront, suffix);
+  }
+  return info.view === "back" ? backSVG(back, "b" + suffix) : frontSVG(front, "f" + suffix);
+}
+
+function weeklyBodyDiagrams(muscleStrengthMap) {
+  const front = {};
+  const back = {};
+  Object.entries(muscleStrengthMap).forEach(([muscle, strength]) => {
+    const info = MUSCLE_INFO[muscle];
+    if (!info || info.region === "fullbody") return;
+    const target = info.view === "back" ? back : front;
+    const color = strength === "primary" ? info.color : info.light;
+    const sev = strength === "primary" ? "strong" : "soft";
+    if (!target[info.region] || sev === "strong") {
+      target[info.region] = { color, strength: sev };
+    }
+  });
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return {
+    front: frontSVG(front, "wf" + suffix),
+    back: backSVG(back, "wb" + suffix),
+  };
 }
