@@ -744,3 +744,29 @@ select{
   padding:10px; background:var(--bg-raised); border-radius:8px;
 }
 .bmi-line b, .maintenance-line b{color:var(--chalk);}
+
+.bmi-gauge-value{
+  text-align:center; font-family:'JetBrains Mono',monospace; font-weight:700;
+  font-size:1rem; margin-top:4px;
+}
+.bmi-gauge-value .bmi-cat{
+  display:block; font-family:'Inter',sans-serif; font-weight:600; font-size:0.75rem;
+  margin-top:2px; text-transform:uppercase; letter-spacing:0.03em;
+}
+
+.rate-option-row{
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--bg-raised); border:1px solid var(--line); border-radius:10px;
+  padding:12px 14px; margin-bottom:8px; cursor:pointer;
+}
+.rate-option-row.selected{
+  border-color:var(--rust); box-shadow:0 0 10px rgba(212,85,31,0.4);
+  background:rgba(212,85,31,0.08);
+}
+.rate-option-name{font-size:0.85rem; font-weight:600;}
+.rate-option-rate{font-size:0.7rem; color:var(--chalk-dim); margin-top:2px;}
+.rate-option-cal{
+  font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:var(--accent-gold);
+  text-align:right;
+}
+.rate-option-pct{font-size:0.68rem; color:var(--chalk-dim); text-align:right; margin-top:2px;}
