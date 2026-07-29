@@ -27,7 +27,29 @@ function glowFilterDefs(idSuffix) {
   `;
 }
 
+// Gender-aware body shapes. Until separate male/female artwork is supplied,
+// both genders render the same unisex silhouette — but the switch is wired so
+// that adding shapeAttrsFrontFemale()/shapeAttrsBackFemale() later is a
+// drop-in change with no other code to touch.
+let CURRENT_BODY_GENDER = "male";
+function setBodyDiagramGender(gender) {
+  CURRENT_BODY_GENDER = gender === "female" ? "female" : "male";
+}
+
 function shapeAttrsFront() {
+  if (CURRENT_BODY_GENDER === "female" && typeof shapeAttrsFrontFemale === "function") {
+    return shapeAttrsFrontFemale();
+  }
+  return shapeAttrsFrontUnisex();
+}
+function shapeAttrsBack() {
+  if (CURRENT_BODY_GENDER === "female" && typeof shapeAttrsBackFemale === "function") {
+    return shapeAttrsBackFemale();
+  }
+  return shapeAttrsBackUnisex();
+}
+
+function shapeAttrsFrontUnisex() {
   return {
     neck:        `<rect x="45" y="21" width="10" height="9" rx="2"/>`,
     delt:        `<circle cx="26" cy="39" r="8.5"/><circle cx="74" cy="39" r="8.5"/>`,
@@ -42,7 +64,7 @@ function shapeAttrsFront() {
   };
 }
 
-function shapeAttrsBack() {
+function shapeAttrsBackUnisex() {
   return {
     "delt-rear": `<circle cx="26" cy="39" r="8.5"/><circle cx="74" cy="39" r="8.5"/>`,
     traps:       `<path d="M 37 34 L 63 34 L 55 52 L 45 52 Z"/>`,
@@ -127,6 +149,37 @@ function bodyDiagramFor(primaryMuscle, secondaryMuscles = []) {
     return frontSVG(allFront, suffix);
   }
   return info.view === "back" ? backSVG(back, "b" + suffix) : frontSVG(front, "f" + suffix);
+}
+
+// Monochromatic weekly volume view: one hue, intensity driven by set count.
+// Darker = more volume that week, lighter = less. Untouched muscles stay at
+// the neutral resting tone so "trained a little" is still visibly different
+// from "not trained at all".
+const VOLUME_HUE = "205"; // blue-teal, degrees
+function volumeColorForCount(count, maxCount) {
+  if (count <= 0) return null; // caller falls back to resting dim fill
+  const frac = maxCount > 0 ? count / maxCount : 0;
+  // lightness 72% (low volume) down to 26% (highest volume)
+  const lightness = Math.round(72 - frac * 46);
+  return `hsl(${VOLUME_HUE}, 65%, ${lightness}%)`;
+}
+
+function weeklyVolumeBodyDiagrams(muscleSetCounts) {
+  const maxCount = Math.max(1, ...Object.values(muscleSetCounts));
+  const front = {};
+  const back = {};
+  Object.entries(muscleSetCounts).forEach(([muscle, count]) => {
+    const info = MUSCLE_INFO[muscle];
+    if (!info || info.region === "fullbody" || count <= 0) return;
+    const target = info.view === "back" ? back : front;
+    const color = volumeColorForCount(count, maxCount);
+    target[info.region] = { color, strength: "strong" };
+  });
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return {
+    front: frontSVG(front, "vf" + suffix),
+    back: backSVG(back, "vb" + suffix),
+  };
 }
 
 function weeklyBodyDiagrams(muscleStrengthMap) {

@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <link rel="stylesheet" href="style.css">
@@ -125,14 +125,77 @@
         <div class="chart-title" style="margin-bottom:10px;">Your daily goals (editable)</div>
         <label class="field-label" for="fpGoalCal">Calories (kcal)</label>
         <input type="number" id="fpGoalCal">
-        <label class="field-label" for="fpGoalProtein">Protein (g)</label>
-        <input type="number" id="fpGoalProtein">
-        <label class="field-label" for="fpGoalCarb">Carbs (g)</label>
-        <input type="number" id="fpGoalCarb">
-        <label class="field-label" for="fpGoalFat">Fat (g)</label>
-        <input type="number" id="fpGoalFat">
-        <button class="save-btn" id="fpSaveBtn" style="margin-top:10px;">Save &amp; start tracking</button>
       </div>
+
+      <div class="panel" id="dietStylePanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:10px;">Pick a diet style</div>
+        <div class="diet-style-grid" id="dietStyleGrid"></div>
+      </div>
+
+      <div class="panel" id="macroLockPanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:6px;">Macro split</div>
+        <div class="bento-sub" style="margin:0 0 12px 0;">Adjust one — the others rebalance to stay at 100% of your calories.</div>
+        <div class="macro-lock-row">
+          <span class="macro-lock-label" style="color:var(--accent-orange);">Protein</span>
+          <input type="number" id="macroLockProteinPct" class="macro-lock-input">
+          <span class="macro-lock-pct">%</span>
+          <span class="macro-lock-grams" id="macroLockProteinG">0g</span>
+        </div>
+        <div class="macro-lock-row">
+          <span class="macro-lock-label" style="color:var(--accent-blue);">Carbs</span>
+          <input type="number" id="macroLockCarbPct" class="macro-lock-input">
+          <span class="macro-lock-pct">%</span>
+          <span class="macro-lock-grams" id="macroLockCarbG">0g</span>
+        </div>
+        <div class="macro-lock-row">
+          <span class="macro-lock-label" style="color:var(--accent-gold);">Fat</span>
+          <input type="number" id="macroLockFatPct" class="macro-lock-input">
+          <span class="macro-lock-pct">%</span>
+          <span class="macro-lock-grams" id="macroLockFatG">0g</span>
+        </div>
+        <div class="macro-lock-total" id="macroLockTotal">100% of 0 kcal</div>
+      </div>
+
+      <div class="panel" id="cyclingInfoPanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:8px;" id="cyclingInfoTitle">Carb Cycling</div>
+        <div id="cyclingInfoBody" class="bento-sub" style="margin:0;"></div>
+      </div>
+
+      <div class="panel" id="fastingWindowPanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:10px;">Eating window</div>
+        <div class="window-preset-row" id="windowPresetRow"></div>
+        <div id="customWindowFields" style="display:none;">
+          <label class="field-label" for="windowStartTime">Eating window starts at</label>
+          <input type="time" id="windowStartTime" value="12:00">
+          <label class="field-label" for="windowHours">Eating window length (hours)</label>
+          <input type="number" id="windowHours" value="8">
+        </div>
+      </div>
+
+      <div class="panel" id="hyperbolicFastingPanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:10px;">Hyperbolic Fasting schedule</div>
+        <div class="checkbox-row" style="margin-top:0;">
+          <input type="radio" name="hfSchedule" id="hfScheduleBurn" value="burnFat" checked>
+          <label for="hfScheduleBurn">Burn fat + build muscle — fasting Tue/Thu/Sun, cheat Mon/Wed/Fri/Sat</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="radio" name="hfSchedule" id="hfScheduleBuild" value="buildMuscle">
+          <label for="hfScheduleBuild">Build muscle + maintain — cheat every day</label>
+        </div>
+        <div class="bento-sub" id="hfProteinNote" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="panel" id="hyperbolicDietPanel" style="display:none;">
+        <div class="chart-title" style="margin-bottom:10px;">Hyperbolic Diet variant</div>
+        <select id="hdVariant">
+          <option value="controlled">Controlled Fat Loss (5-day rotation)</option>
+          <option value="extreme">Extreme Fat Loss — special occasions only</option>
+          <option value="maintenance">Maintenance / Muscle Gain</option>
+        </select>
+        <div class="bento-sub" id="hdRotationNote"></div>
+      </div>
+
+      <button class="save-btn" id="fpSaveBtn" style="margin-top:10px; display:none;">Save &amp; start tracking</button>
     </div>
 
     <div id="foodDaily" style="display:none;">
@@ -189,6 +252,8 @@
           <button class="save-btn weight-save-btn" id="dailyWeightSaveBtn">Log</button>
         </div>
       </div>
+
+      <div id="dietStatusPanel"></div>
 
       <div id="mealSections"></div>
 
@@ -316,8 +381,10 @@
 <div class="toast" id="toast"></div>
 
 <script src="program-data.js"></script>
+<script src="exercise-database.js"></script>
 <script src="body-diagrams.js"></script>
 <script src="app.js"></script>
+<script src="diet-styles.js"></script>
 <script src="food.js"></script>
 </body>
 </html>

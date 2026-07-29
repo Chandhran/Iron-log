@@ -39,7 +39,7 @@ html,body{margin:0;padding:0;}
 body{
   background:var(--bg);
   color:var(--chalk);
-  font-family:'Inter',system-ui,sans-serif;
+  font-family:'Manrope',system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;
   min-height:100vh;
   padding-bottom:40px;
@@ -63,7 +63,7 @@ body{
 .brand-mark{width:34px;height:34px;border-radius:8px;flex-shrink:0;}
 .brand-text{display:flex;flex-direction:column;line-height:1.15;flex:1;min-width:0;}
 .brand-name{
-  font-family:'Oswald',sans-serif;
+  font-family:'Manrope',sans-serif;
   font-weight:700;
   font-size:1.15rem;
   letter-spacing:0.06em;
@@ -93,7 +93,7 @@ body{
   border:none;
   background:transparent;
   color:var(--chalk-dim);
-  font-family:'Inter',sans-serif;
+  font-family:'Manrope',sans-serif;
   font-weight:600;
   font-size:0.85rem;
   padding:9px 0;
@@ -127,7 +127,7 @@ body{
   margin-bottom:6px;
 }
 .bento-big{
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   font-size:1.5rem;
   font-weight:700;
   color:var(--chalk);
@@ -185,7 +185,7 @@ body{
 .muscle-trend.down{background:rgba(181,70,27,0.18);color:var(--rust-bright);}
 .muscle-trend.flat{background:rgba(92,102,112,0.2);color:var(--steel);}
 .muscle-card-count{
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   font-size:1.2rem;
   font-weight:700;
   margin-bottom:6px;
@@ -233,7 +233,7 @@ body{
   border:1px solid var(--line);
   background:var(--bg-card);
   color:var(--chalk-dim);
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   font-size:0.68rem;
   font-weight:600;
   display:flex;
@@ -281,7 +281,7 @@ body{
 
 .day-header{margin:6px 2px 14px 2px;}
 .day-header h2{
-  font-family:'Oswald',sans-serif;
+  font-family:'Manrope',sans-serif;
   font-size:1.3rem;
   font-weight:600;
   margin:0 0 2px 0;
@@ -353,7 +353,7 @@ body{
 }
 .view-label{font-size:0.65rem;color:var(--chalk-dim);}
 .exercise-target{
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   font-size:0.72rem;
   color:var(--rust-bright);
   white-space:nowrap;
@@ -369,7 +369,7 @@ body{
   align-items:center;
 }
 .set-num{
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   font-size:0.75rem;
   color:var(--steel);
   text-align:center;
@@ -380,7 +380,7 @@ body{
   border:1px solid var(--line);
   border-radius:7px;
   color:var(--chalk);
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   font-size:0.95rem;
   font-weight:600;
   padding:9px 8px;
@@ -423,7 +423,7 @@ body{
   border:none;
   border-radius:10px;
   padding:14px;
-  font-family:'Oswald',sans-serif;
+  font-family:'Manrope',sans-serif;
   font-weight:600;
   font-size:0.95rem;
   letter-spacing:0.05em;
@@ -475,7 +475,7 @@ select{
 .chart-title{font-weight:600;font-size:0.85rem;}
 #prBox{font-size:0.85rem;color:var(--chalk-dim);}
 #prBox .pr-line{color:var(--chalk);font-weight:600;}
-#prBox .pr-value{color:var(--rust-bright);font-family:'JetBrains Mono',monospace;}
+#prBox .pr-value{color:var(--rust-bright);font-family:'Manrope',monospace;}
 
 /* ---------- HISTORY VIEW ---------- */
 .history-card{
@@ -492,7 +492,7 @@ select{
 .history-date{font-weight:600;font-size:0.9rem;}
 .history-tag{font-size:0.7rem;color:var(--rust-bright);text-transform:uppercase;font-weight:600;}
 .history-ex{font-size:0.8rem;color:var(--chalk-dim);margin:2px 0;}
-.history-ex b{color:var(--chalk);font-family:'JetBrains Mono',monospace;font-weight:600;}
+.history-ex b{color:var(--chalk);font-family:'Manrope',monospace;font-weight:600;}
 .history-del{
   background:none;border:none;color:var(--steel);font-size:0.72rem;
   cursor:pointer;text-decoration:underline;margin-top:6px;padding:0;
@@ -524,7 +524,7 @@ select{
   padding:11px;
   border-radius:8px;
   font-size:0.9rem;
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   margin-bottom:12px;
 }
 .panel input[type="text"]:focus,.panel input[type="password"]:focus{outline:none;border-color:var(--rust);}
@@ -592,6 +592,12 @@ select{
 .trained-body-col-label{font-size:0.65rem;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:0.04em;}
 .trained-legend{display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:0.68rem;color:var(--chalk-dim);}
 .trained-legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle;}
+.volume-gradient-legend{display:flex; flex-direction:column; align-items:center; gap:4px; width:100%;}
+.volume-gradient-bar{
+  width:70%; height:8px; border-radius:4px;
+  background:linear-gradient(90deg, hsl(205,65%,72%), hsl(205,65%,26%));
+}
+.volume-gradient-labels{display:flex; justify-content:space-between; width:70%; font-size:0.65rem;}
 
 /* ---------- MODAL SYSTEM (Sync + Add Food) ---------- */
 .modal-overlay{
@@ -619,7 +625,7 @@ select{
   border-bottom:1px solid var(--line);
   position:sticky;top:0;background:var(--bg);
 }
-.modal-title{font-family:'Oswald',sans-serif;font-weight:600;font-size:1.05rem;}
+.modal-title{font-family:'Manrope',sans-serif;font-weight:600;font-size:1.05rem;}
 .modal-close{
   background:var(--bg-card);border:1px solid var(--line);color:var(--chalk-dim);
   width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:0.9rem;
@@ -634,7 +640,7 @@ select{
   background:var(--bg-card);border:1px solid var(--line);color:var(--chalk);
   border-radius:8px;padding:8px 12px;font-size:1rem;cursor:pointer;font-weight:600;
 }
-.food-date-label{flex:1;text-align:center;font-family:'Oswald',sans-serif;font-weight:600;font-size:0.95rem;}
+.food-date-label{flex:1;text-align:center;font-family:'Manrope',sans-serif;font-weight:600;font-size:0.95rem;}
 .food-edit-goals{font-size:0.72rem;padding:8px 10px;}
 
 .food-calorie-card{
@@ -646,7 +652,7 @@ select{
   text-align:center;
 }
 .calorie-left-num{
-  font-family:'JetBrains Mono',monospace;font-size:1.7rem;font-weight:700;
+  font-family:'Manrope',monospace;font-size:1.7rem;font-weight:700;
   color:var(--accent-gold);
   text-shadow:0 0 10px rgba(255,201,74,0.5);
 }
@@ -658,7 +664,7 @@ select{
   padding:10px;text-align:center;
 }
 .macro-ring-label{font-size:0.68rem;color:var(--chalk-dim);margin-top:4px;text-transform:uppercase;letter-spacing:0.03em;}
-.macro-ring-value{font-family:'JetBrains Mono',monospace;font-size:0.8rem;font-weight:600;margin-top:2px;}
+.macro-ring-value{font-family:'Manrope',monospace;font-size:0.8rem;font-weight:600;margin-top:2px;}
 
 .weight-entry-panel{margin-bottom:14px;}
 .weight-entry-row{display:flex;gap:8px;}
@@ -673,7 +679,7 @@ select{
   display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
 }
 .meal-section-title{font-weight:600;font-size:0.9rem;}
-.meal-section-kcal{font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--accent-gold);}
+.meal-section-kcal{font-family:'Manrope',monospace;font-size:0.78rem;color:var(--accent-gold);}
 .meal-add-btn{
   background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);
   border-radius:8px;width:28px;height:28px;font-size:1.1rem;cursor:pointer;
@@ -685,14 +691,14 @@ select{
 .food-item-row:last-child{border-bottom:none;}
 .food-item-name{font-weight:500;}
 .food-item-macro{color:var(--chalk-dim);font-size:0.72rem;}
-.food-item-kcal{font-family:'JetBrains Mono',monospace;color:var(--chalk);}
+.food-item-kcal{font-family:'Manrope',monospace;color:var(--chalk);}
 .food-item-del{background:none;border:none;color:var(--steel);font-size:0.9rem;cursor:pointer;padding:0 0 0 8px;}
 
 .micro-panel{display:flex;flex-direction:column;gap:10px;}
 .micro-row{display:flex;flex-direction:column;gap:3px;}
 .micro-row-top{display:flex;justify-content:space-between;font-size:0.75rem;}
 .micro-name{font-weight:600;}
-.micro-amount{color:var(--chalk-dim);font-family:'JetBrains Mono',monospace;font-size:0.7rem;}
+.micro-amount{color:var(--chalk-dim);font-family:'Manrope',monospace;font-size:0.7rem;}
 .micro-bar-track{width:100%;height:5px;background:var(--bg-raised);border-radius:3px;overflow:hidden;}
 .micro-bar-fill{height:100%;border-radius:3px;}
 
@@ -707,7 +713,7 @@ select{
   padding:11px;
   border-radius:8px;
   font-size:0.9rem;
-  font-family:'JetBrains Mono',monospace;
+  font-family:'Manrope',monospace;
   margin-bottom:12px;
 }
 .panel input[type="number"]:focus,.panel select:focus{outline:none;border-color:var(--rust);}
@@ -739,6 +745,67 @@ select{
 .chart-empty-note{font-size:0.8rem;color:var(--chalk-dim);text-align:center;padding:10px 0;}
 .chart-panel{position:relative;}
 
+.swapped-tag{
+  display:inline-block; font-size:0.6rem; font-weight:700; text-transform:uppercase;
+  background:var(--accent-blue); color:#0a1420; border-radius:5px; padding:1px 5px; margin-left:6px;
+  vertical-align:middle;
+}
+
+.alt-bar{margin:2px 0 10px 0;}
+.alt-bar-label{font-size:0.68rem; color:var(--chalk-dim); margin-bottom:6px;}
+.alt-chip-row{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;}
+.alt-chip{
+  flex:0 0 auto; background:var(--bg-raised); border:1px solid var(--line); color:var(--chalk);
+  border-radius:8px; padding:7px 11px; font-size:0.74rem; font-weight:500; white-space:nowrap; cursor:pointer;
+}
+.alt-chip:active{border-color:var(--accent-blue);}
+.alt-chip.alt-reset{background:rgba(74,158,255,0.12); border-color:var(--accent-blue); color:var(--accent-blue); font-weight:600;}
+
+.warmup-box{
+  background:var(--bg-raised); border:1px dashed var(--line); border-radius:8px;
+  padding:8px 10px; margin-bottom:10px;
+}
+.warmup-label{font-size:0.68rem; color:var(--chalk-dim); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.03em;}
+.warmup-row{display:flex; align-items:center; gap:8px; padding:4px 0; font-size:0.8rem; cursor:pointer;}
+.warmup-row input[type="checkbox"]{width:17px; height:17px; accent-color:var(--accent-gold);}
+
+.diet-style-grid{display:flex; flex-wrap:wrap; gap:8px;}
+.diet-style-btn{
+  flex:0 0 auto; background:var(--bg-raised); border:1px solid var(--line); color:var(--chalk);
+  border-radius:9px; padding:9px 13px; font-size:0.78rem; font-weight:600; cursor:pointer;
+}
+.diet-style-btn.selected{background:var(--rust); border-color:var(--rust); box-shadow:0 0 10px rgba(212,85,31,0.4);}
+
+.macro-lock-row{display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+.macro-lock-label{flex:0 0 60px; font-size:0.8rem; font-weight:600;}
+.macro-lock-input{
+  width:56px; background:var(--bg-raised); border:1px solid var(--line); color:var(--chalk);
+  border-radius:7px; padding:8px; text-align:center; font-family:'Manrope',monospace; font-size:0.85rem;
+}
+.macro-lock-pct{font-size:0.75rem; color:var(--chalk-dim);}
+.macro-lock-grams{flex:1; text-align:right; font-family:'Manrope',monospace; font-size:0.8rem; color:var(--chalk-dim);}
+.macro-lock-total{font-size:0.72rem; color:var(--chalk-dim); text-align:right; margin-top:4px;}
+
+.window-preset-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;}
+.window-preset-btn{
+  flex:0 0 auto; background:var(--bg-raised); border:1px solid var(--line); color:var(--chalk);
+  border-radius:8px; padding:8px 12px; font-size:0.78rem; cursor:pointer;
+}
+.window-preset-btn.selected{background:var(--accent-blue); border-color:var(--accent-blue); color:#0a1420; font-weight:700;}
+
+.fasting-status-banner{
+  padding:12px 14px; border-radius:12px; margin-bottom:14px; font-weight:600; font-size:0.85rem;
+  text-align:center;
+}
+.fasting-status-banner.open{background:rgba(74,207,107,0.15); color:var(--accent-green); box-shadow:0 0 12px rgba(74,207,107,0.3);}
+.fasting-status-banner.closed{background:rgba(255,107,74,0.12); color:var(--accent-orange); box-shadow:0 0 12px rgba(255,107,74,0.25);}
+
+.hyperbolic-meal-card{
+  background:var(--bg-raised); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px;
+}
+.hyperbolic-meal-name{font-weight:600; font-size:0.82rem; color:var(--accent-gold);}
+.hyperbolic-meal-detail{font-size:0.76rem; color:var(--chalk-dim); margin-top:2px;}
+
 .bmi-line, .maintenance-line{
   font-size:0.85rem; color:var(--chalk-dim); margin-bottom:10px;
   padding:10px; background:var(--bg-raised); border-radius:8px;
@@ -746,11 +813,11 @@ select{
 .bmi-line b, .maintenance-line b{color:var(--chalk);}
 
 .bmi-gauge-value{
-  text-align:center; font-family:'JetBrains Mono',monospace; font-weight:700;
+  text-align:center; font-family:'Manrope',monospace; font-weight:700;
   font-size:1rem; margin-top:4px;
 }
 .bmi-gauge-value .bmi-cat{
-  display:block; font-family:'Inter',sans-serif; font-weight:600; font-size:0.75rem;
+  display:block; font-family:'Manrope',sans-serif; font-weight:600; font-size:0.75rem;
   margin-top:2px; text-transform:uppercase; letter-spacing:0.03em;
 }
 
@@ -766,7 +833,7 @@ select{
 .rate-option-name{font-size:0.85rem; font-weight:600;}
 .rate-option-rate{font-size:0.7rem; color:var(--chalk-dim); margin-top:2px;}
 .rate-option-cal{
-  font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:var(--accent-gold);
+  font-family:'Manrope',monospace; font-size:1rem; font-weight:700; color:var(--accent-gold);
   text-align:right;
 }
 .rate-option-pct{font-size:0.68rem; color:var(--chalk-dim); text-align:right; margin-top:2px;}

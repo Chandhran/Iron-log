@@ -204,19 +204,52 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
   });
 });
 
-// ---------- EXERCISE -> MUSCLE LOOKUP ----------
+// ---------- EXERCISE -> MUSCLE LOOKUP (program + exercise database) ----------
 const EXERCISE_MUSCLE = {};
 const EXERCISE_SECONDARY = {};
+const EXERCISE_PATTERN = {};
+const EXERCISE_COMPOUND = {};
+const EXERCISE_TARGET = {}; // default target string, used when swapping in an alternative
+
 Object.values(PROGRAM).forEach(phase => {
   phase.days.forEach(day => {
     if (day.type === "training") {
       day.exercises.forEach(ex => {
         EXERCISE_MUSCLE[ex.name] = ex.muscle;
         EXERCISE_SECONDARY[ex.name] = ex.secondary || [];
+        EXERCISE_PATTERN[ex.name] = ex.pattern || "";
+        EXERCISE_COMPOUND[ex.name] = !!ex.compound;
+        EXERCISE_TARGET[ex.name] = ex.target;
       });
     }
   });
 });
+// Exercise database entries fill in any not already present (program takes precedence for its own naming)
+if (typeof EXERCISE_DATABASE !== "undefined") {
+  EXERCISE_DATABASE.forEach(ex => {
+    if (!(ex.name in EXERCISE_MUSCLE)) {
+      EXERCISE_MUSCLE[ex.name] = ex.muscle;
+      EXERCISE_SECONDARY[ex.name] = ex.secondary || [];
+      EXERCISE_PATTERN[ex.name] = ex.pattern || "";
+      EXERCISE_COMPOUND[ex.name] = !!ex.compound;
+      EXERCISE_TARGET[ex.name] = "";
+    }
+  });
+}
+
+// Find alternative exercises for a given exercise name: same primary muscle AND
+// same movement pattern, pulled from the full combined pool (program + database).
+function findAlternatives(exerciseName, limit = 8) {
+  const muscle = EXERCISE_MUSCLE[exerciseName];
+  const pattern = EXERCISE_PATTERN[exerciseName];
+  if (!muscle || !pattern) return [];
+  const pool = new Set(Object.keys(EXERCISE_MUSCLE));
+  pool.delete(exerciseName);
+  const matches = Array.from(pool).filter(name =>
+    EXERCISE_MUSCLE[name] === muscle && EXERCISE_PATTERN[name] === pattern
+  );
+  return matches.slice(0, limit);
+}
 
 // ---------- DATE HELPERS ----------
 function parseISO(iso) { return new Date(iso + "T00:00:00"); }
@@ -354,7 +387,7 @@ function renderDashboard(targetId) {
   `).join("");
 
   const activeStats = trainedAreasWeekMode[targetId] === "this" ? thisWeek : lastWeek;
-  const diagrams = weeklyBodyDiagrams(activeStats.muscleStrength);
+  const diagrams = weeklyVolumeBodyDiagrams(activeStats.muscleSets);
 
   el.innerHTML = `
     <div class="bento-row">
@@ -393,8 +426,10 @@ function renderDashboard(targetId) {
         <div class="trained-body-col">${diagrams.back}<span class="trained-body-col-label">Back</span></div>
       </div>
       <div class="trained-legend">
-        <span><span class="trained-legend-dot" style="background:var(--accent-orange);"></span>Primary</span>
-        <span><span class="trained-legend-dot" style="background:#FFB09C;"></span>Secondary</span>
+        <span class="volume-gradient-legend">
+          <span class="volume-gradient-bar"></span>
+          <span class="volume-gradient-labels"><span>Less volume</span><span>More volume</span></span>
+        </span>
       </div>
     </div>
 
@@ -588,32 +623,73 @@ function renderDayContent() {
 
   let currentSession = existing;
 
-  day.exercises.forEach((ex, exIdx) => {
+  function getSwappedName(exIdx) {
+    return currentSession?.swaps?.[exIdx] || null;
+  }
+
+  function renderExerciseCard(ex, exIdx) {
+    const swappedName = getSwappedName(exIdx);
+    const effectiveName = swappedName || ex.name;
+    const effectiveMuscle = EXERCISE_MUSCLE[effectiveName] || ex.muscle;
+    const effectiveSecondary = EXERCISE_SECONDARY[effectiveName] || ex.secondary || [];
+    const isCompoundLift = EXERCISE_COMPOUND[effectiveName];
+    const warmupCount = isCompoundLift ? 2 : 0;
+
     const card = document.createElement("div");
     card.className = "exercise-card";
+    card.dataset.exIdx = exIdx;
 
     const titleRow = document.createElement("div");
     titleRow.className = "exercise-title-row";
-    const muscleColor = (MUSCLE_INFO[ex.muscle] && MUSCLE_INFO[ex.muscle].color) || "#5C6670";
-    const viewLabel = (MUSCLE_INFO[ex.muscle] && MUSCLE_INFO[ex.muscle].view) === "back" ? "Back view" : "Front view";
-    const secondary = ex.secondary || [];
-    const secondaryChips = secondary.map(sm => {
+    const muscleColor = (MUSCLE_INFO[effectiveMuscle] && MUSCLE_INFO[effectiveMuscle].color) || "#5C6670";
+    const viewLabel = (MUSCLE_INFO[effectiveMuscle] && MUSCLE_INFO[effectiveMuscle].view) === "back" ? "Back view" : "Front view";
+    const secondaryChips = effectiveSecondary.map(sm => {
       const c = (MUSCLE_INFO[sm] && MUSCLE_INFO[sm].light) || "#5C6670";
       return `<span class="secondary-chip" style="--chip-color:${c}">${sm}</span>`;
     }).join("");
 
     titleRow.innerHTML = `
       <div class="exercise-diagram">
-        ${bodyDiagramFor(ex.muscle, secondary)}
+        ${bodyDiagramFor(effectiveMuscle, effectiveSecondary)}
       </div>
       <div class="exercise-name-wrap">
-        <span class="exercise-name">${ex.name}</span>
-        <span class="muscle-chip glow" style="--chip-color:${muscleColor}; color:${muscleColor};">${ex.muscle}</span>
+        <span class="exercise-name">${effectiveName}${swappedName ? '<span class="swapped-tag">Swapped</span>' : ""}</span>
+        <span class="muscle-chip glow" style="--chip-color:${muscleColor}; color:${muscleColor};">${effectiveMuscle}</span>
         ${secondaryChips ? `<div class="secondary-chip-row">${secondaryChips}</div>` : ""}
         <span class="view-label">${viewLabel}</span>
       </div>
       <span class="exercise-target">${ex.target}</span>`;
     card.appendChild(titleRow);
+
+    // Alternatives row (swap for this session only)
+    const alternatives = findAlternatives(swappedName || ex.name);
+    const altBar = document.createElement("div");
+    altBar.className = "alt-bar";
+    const altChips = [];
+    if (swappedName) {
+      altChips.push(`<button class="alt-chip alt-reset" data-ex="${exIdx}" data-swap="">↺ Use ${ex.name}</button>`);
+    }
+    alternatives.forEach(altName => {
+      altChips.push(`<button class="alt-chip" data-ex="${exIdx}" data-swap="${altName}">${altName}</button>`);
+    });
+    if (altChips.length) {
+      altBar.innerHTML = `<div class="alt-bar-label">No equipment? Swap:</div><div class="alt-chip-row">${altChips.join("")}</div>`;
+      card.appendChild(altBar);
+    }
+
+    // Warm-up rows (checkbox only, no weight/reps needed)
+    if (warmupCount > 0) {
+      const warmupBox = document.createElement("div");
+      warmupBox.className = "warmup-box";
+      const savedWarmups = currentSession?.warmups?.[exIdx] || [];
+      let warmupHtml = `<div class="warmup-label">Warm-up sets — do these before your working sets</div>`;
+      for (let w = 0; w < warmupCount; w++) {
+        const checked = savedWarmups[w] ? "checked" : "";
+        warmupHtml += `<label class="warmup-row"><input type="checkbox" data-warmup-ex="${exIdx}" data-warmup-idx="${w}" ${checked}><span>Warm-up set ${w + 1}</span></label>`;
+      }
+      warmupBox.innerHTML = warmupHtml;
+      card.appendChild(warmupBox);
+    }
 
     const labels = document.createElement("div");
     labels.className = "set-labels";
@@ -623,7 +699,7 @@ function renderDayContent() {
     const grid = document.createElement("div");
     grid.className = "set-grid";
 
-    const prevEx = existing?.exercises?.find(e => e.name === ex.name);
+    const prevEx = existing?.exercises?.find(e => e.name === effectiveName);
 
     for (let i = 0; i < ex.sets; i++) {
       const row = document.createElement("div");
@@ -641,7 +717,45 @@ function renderDayContent() {
       grid.appendChild(row);
     }
     card.appendChild(grid);
-    container.appendChild(card);
+    return card;
+  }
+
+  day.exercises.forEach((ex, exIdx) => {
+    container.appendChild(renderExerciseCard(ex, exIdx));
+  });
+
+  // Wire alternative-swap buttons
+  container.querySelectorAll(".alt-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const exIdx = btn.dataset.ex;
+      const swapTo = btn.dataset.swap;
+      if (!currentSession) {
+        currentSession = { id: Date.now().toString(), week: state.week, day: day.name, startTime: new Date().toISOString() };
+        sessions.push(currentSession);
+      }
+      currentSession.swaps = currentSession.swaps || {};
+      if (swapTo) currentSession.swaps[exIdx] = swapTo;
+      else delete currentSession.swaps[exIdx];
+      saveSessions(sessions);
+      renderDayContent();
+    });
+  });
+
+  // Wire warm-up checkboxes
+  container.querySelectorAll('input[data-warmup-ex]').forEach(cb => {
+    cb.addEventListener("change", () => {
+      const exIdx = cb.dataset.warmupEx;
+      const wIdx = parseInt(cb.dataset.warmupIdx);
+      if (!currentSession) {
+        currentSession = { id: Date.now().toString(), week: state.week, day: day.name, startTime: new Date().toISOString() };
+        sessions.push(currentSession);
+      }
+      currentSession.warmups = currentSession.warmups || {};
+      currentSession.warmups[exIdx] = currentSession.warmups[exIdx] || [];
+      currentSession.warmups[exIdx][wIdx] = cb.checked;
+      saveSessions(sessions);
+      syncPush(`Warm-up — Week ${state.week} ${day.name}`);
+    });
   });
 
   const doAutosave = debounce(() => {
@@ -654,7 +768,8 @@ function renderDayContent() {
           sets.push({ weight: w !== "" ? parseFloat(w) : null, reps: r !== "" ? parseInt(r) : null });
         }
       }
-      return { name: ex.name, target: ex.target, sets };
+      const effectiveName = getSwappedName(exIdx) || ex.name;
+      return { name: effectiveName, target: ex.target, sets };
     }).filter(e => e.sets.length > 0);
 
     const nowISO = new Date().toISOString();
@@ -731,38 +846,57 @@ function renderProgressTab() {
   else if (select.options.length) drawExerciseCharts(select.options[0].value);
 }
 
-function chartCommonOpts() {
+function chartCommonOpts(yLabel, xLabel, yMax) {
+  const scales = {
+    x: {
+      ticks: { color: "#9b9890", font: { size: 10 } },
+      grid: { color: "#2e2e2e" },
+      title: xLabel ? { display: true, text: xLabel, color: "#9b9890", font: { size: 10 } } : undefined,
+    },
+    y: {
+      ticks: { color: "#9b9890" },
+      grid: { color: "#2e2e2e" },
+      beginAtZero: true,
+      title: yLabel ? { display: true, text: yLabel, color: "#9b9890", font: { size: 10 } } : undefined,
+    }
+  };
+  if (yMax != null) scales.y.suggestedMax = yMax;
   return {
     responsive: true,
     plugins: { legend: { display: false } },
-    scales: {
-      x: { ticks: { color: "#9b9890", font: { size: 10 } }, grid: { color: "#2e2e2e" } },
-      y: { ticks: { color: "#9b9890" }, grid: { color: "#2e2e2e" }, beginAtZero: true }
-    }
+    scales,
   };
 }
 
 function renderWeightTrendChart() {
   const canvas = document.getElementById("weightTrendChart");
   const emptyNote = document.getElementById("weightTrendEmpty");
+  if (emptyNote) emptyNote.style.display = "none";
+  canvas.style.display = "block";
   const sorted = [...weightLogs].sort((a, b) => a.date < b.date ? -1 : 1);
   if (weightTrendChart) weightTrendChart.destroy();
+
+  let labels, data, yMax;
   if (sorted.length === 0) {
-    canvas.style.display = "none";
-    emptyNote.style.display = "block";
-    return;
+    // Scaffold: last 7 days, no points yet, but a real labeled axis baseline
+    const today = new Date();
+    labels = Array.from({ length: 7 }, (_, i) => formatDate(addDays(today, i - 6).toISOString().slice(0, 10)));
+    data = labels.map(() => null);
+    const profile = (typeof loadFoodProfile === "function") ? loadFoodProfile() : null;
+    yMax = profile?.weightKg ? Math.ceil(profile.weightKg * 1.3 / 10) * 10 : 100;
+  } else {
+    labels = sorted.map(w => formatDate(w.date));
+    data = sorted.map(w => w.weightKg);
+    yMax = Math.ceil(Math.max(...data) * 1.15 / 10) * 10;
   }
-  canvas.style.display = "block";
-  emptyNote.style.display = "none";
-  const labels = sorted.map(w => formatDate(w.date));
-  const data = sorted.map(w => w.weightKg);
+
   weightTrendChart = new Chart(canvas, {
     type: "line",
     data: { labels, datasets: [{
       data, borderColor: "#4A9EFF", backgroundColor: "rgba(74,158,255,0.15)",
       pointBackgroundColor: "#4A9EFF", tension: 0.3, fill: true, spanGaps: true,
     }]},
-    options: chartCommonOpts()
+    options: chartCommonOpts("Weight (kg)", "Date", yMax)
   });
 }
 
@@ -775,6 +909,7 @@ function renderMuscleBarChart() {
   const labels = MUSCLE_ORDER.map(m => m.length > 12 ? m.split(" ")[0] : m);
   const thisData = MUSCLE_ORDER.map(m => thisWeek.muscleSets[m] || 0);
   const lastData = MUSCLE_ORDER.map(m => lastWeek.muscleSets[m] || 0);
+  const maxVal = Math.max(...thisData, ...lastData, 5);
 
   if (muscleBarChart) muscleBarChart.destroy();
   muscleBarChart = new Chart(canvas, {
@@ -791,7 +926,10 @@ function renderMuscleBarChart() {
       plugins: { legend: { display: true, labels: { color: "#9b9890", font: { size: 10 } } } },
       scales: {
         x: { ticks: { color: "#9b9890", font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: "#9b9890" }, grid: { color: "#2e2e2e" }, beginAtZero: true }
+        y: {
+          ticks: { color: "#9b9890" }, grid: { color: "#2e2e2e" }, beginAtZero: true, suggestedMax: Math.ceil(maxVal * 1.2),
+          title: { display: true, text: "Sets", color: "#9b9890", font: { size: 10 } },
+        }
       }
     }
   });
@@ -807,9 +945,20 @@ function drawExerciseCharts(exerciseName) {
     points.push({ date: s.date, week: s.week, topWeight: weights.length ? Math.max(...weights) : null, volume });
   });
 
-  const labels = points.map(p => `W${p.week} · ${formatDate(p.date)}`);
-  const weightData = points.map(p => p.topWeight);
-  const volumeData = points.map(p => p.volume);
+  let labels, weightData, volumeData, weightMax, volumeMax;
+  if (points.length === 0) {
+    labels = ["Session 1", "Session 2", "Session 3", "Session 4", "Session 5"];
+    weightData = labels.map(() => null);
+    volumeData = labels.map(() => null);
+    weightMax = 100;
+    volumeMax = 1000;
+  } else {
+    labels = points.map(p => `W${p.week} · ${formatDate(p.date)}`);
+    weightData = points.map(p => p.topWeight);
+    volumeData = points.map(p => p.volume);
+    weightMax = Math.ceil(Math.max(...weightData.filter(w => w != null), 10) * 1.15);
+    volumeMax = Math.ceil(Math.max(...volumeData, 100) * 1.15);
+  }
 
   const ctxW = document.getElementById("weightChart");
   const ctxV = document.getElementById("volumeChart");
@@ -819,12 +968,12 @@ function drawExerciseCharts(exerciseName) {
   weightChart = new Chart(ctxW, {
     type: "line",
     data: { labels, datasets: [{ data: weightData, borderColor: "#D4551F", backgroundColor: "rgba(181,70,27,0.15)", pointBackgroundColor: "#D4551F", tension: 0.25, fill: true, spanGaps: true }]},
-    options: chartCommonOpts()
+    options: chartCommonOpts("Top weight (kg)", "Session", weightMax)
   });
   volumeChart = new Chart(ctxV, {
     type: "bar",
     data: { labels, datasets: [{ data: volumeData, backgroundColor: "#5C6670" }]},
-    options: chartCommonOpts()
+    options: chartCommonOpts("Volume (kg × reps)", "Session", volumeMax)
   });
 
   const prBox = document.getElementById("prBox");
@@ -900,6 +1049,12 @@ function renderHistory() {
 }
 
 // ---------- INIT ----------
+setTimeout(() => {
+  if (typeof loadFoodProfile === "function") {
+    const fp = loadFoodProfile();
+    if (fp?.gender) { setBodyDiagramGender(fp.gender); renderDashboard("dashboard-train"); }
+  }
+}, 0);
 renderDashboard("dashboard-train");
 renderRail();
 renderPhaseLabel();

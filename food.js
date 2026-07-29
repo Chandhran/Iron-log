@@ -202,16 +202,10 @@ const RATE_OPTIONS = [
   { key: "fastGain",     label: "Fast weight gain",    rate: 1 },
 ];
 
-function macrosFromCalories(calories, weightKg) {
-  const goalProtein = Math.round(weightKg * 1.8);
-  const goalFat = Math.round((calories * 0.25) / 9);
-  const proteinCals = goalProtein * 4;
-  const fatCals = goalFat * 9;
-  const goalCarb = Math.max(0, Math.round((calories - proteinCals - fatCals) / 4));
-  return { goalProtein, goalCarb, goalFat };
-}
-
 let selectedRateKey = "maintain";
+let selectedDietStyle = "balanced";
+let currentMacroPct = { protein: 25, carb: 45, fat: 30 };
+let setupProfileBase = {};
 
 function renderRateOptions(maintenanceCalories, weightKg) {
   const list = document.getElementById("rateOptionsList");
@@ -237,15 +231,141 @@ function renderRateOptions(maintenanceCalories, weightKg) {
       selectedRateKey = row.dataset.key;
       list.querySelectorAll(".rate-option-row").forEach(r => r.classList.remove("selected"));
       row.classList.add("selected");
-      const cal = parseFloat(row.dataset.cal);
-      const macros = macrosFromCalories(cal, weightKg);
-      document.getElementById("fpGoalCal").value = cal;
-      document.getElementById("fpGoalProtein").value = macros.goalProtein;
-      document.getElementById("fpGoalCarb").value = macros.goalCarb;
-      document.getElementById("fpGoalFat").value = macros.goalFat;
+      document.getElementById("fpGoalCal").value = row.dataset.cal;
       document.getElementById("fpGoalsPanel").style.display = "block";
+      document.getElementById("dietStylePanel").style.display = "block";
+      refreshMacroLockDisplay();
+      refreshCyclingInfo();
     });
   });
+}
+
+// ---------- DIET STYLE GRID ----------
+function renderDietStyleGrid() {
+  const grid = document.getElementById("dietStyleGrid");
+  grid.innerHTML = DIET_STYLE_ORDER.map(key => {
+    const style = DIET_STYLES[key];
+    return `<button class="diet-style-btn ${key === selectedDietStyle ? "selected" : ""}" data-style="${key}">${style.label}</button>`;
+  }).join("");
+  grid.querySelectorAll(".diet-style-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      selectedDietStyle = btn.dataset.style;
+      grid.querySelectorAll(".diet-style-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      applyDietStyleSelection();
+    });
+  });
+}
+
+function hideAllDietSubpanels() {
+  ["macroLockPanel", "cyclingInfoPanel", "fastingWindowPanel", "hyperbolicFastingPanel", "hyperbolicDietPanel"].forEach(id => {
+    document.getElementById(id).style.display = "none";
+  });
+}
+
+function applyDietStyleSelection() {
+  hideAllDietSubpanels();
+  const style = DIET_STYLES[selectedDietStyle];
+  const goalCalEl = document.getElementById("fpGoalCal");
+  const goalCalRow = goalCalEl.parentElement; // the whole fpGoalsPanel is one block, we just hide fields inside for hyperbolic
+
+  if (style.type === "ratio") {
+    currentMacroPct = { protein: style.protein, carb: style.carb, fat: style.fat };
+    document.getElementById("macroLockPanel").style.display = "block";
+    document.getElementById("fpGoalsPanel").style.display = "block";
+    refreshMacroLockDisplay();
+  } else if (style.type === "cycling" || style.type === "zigzag") {
+    document.getElementById("cyclingInfoPanel").style.display = "block";
+    document.getElementById("fpGoalsPanel").style.display = "block";
+    refreshCyclingInfo();
+  } else if (style.type === "timing") {
+    currentMacroPct = { protein: 30, carb: 40, fat: 30 }; // slightly higher protein default for fewer meals
+    document.getElementById("macroLockPanel").style.display = "block";
+    document.getElementById("fastingWindowPanel").style.display = "block";
+    document.getElementById("fpGoalsPanel").style.display = "block";
+    renderWindowPresets(style.defaultWindow);
+    refreshMacroLockDisplay();
+  } else if (style.type === "hyperbolicFasting") {
+    document.getElementById("hyperbolicFastingPanel").style.display = "block";
+    document.getElementById("fpGoalsPanel").style.display = "none";
+    const heightCm = parseFloat(document.getElementById("fpHeight").value);
+    const N = heightNumberFromCm(heightCm);
+    document.getElementById("hfProteinNote").textContent = `Your protein number (from height): ${N}g/day baseline.`;
+  } else if (style.type === "hyperbolicDiet") {
+    document.getElementById("hyperbolicDietPanel").style.display = "block";
+    document.getElementById("fpGoalsPanel").style.display = "none";
+    updateHyperbolicDietNote();
+  }
+}
+
+function refreshMacroLockDisplay() {
+  const calories = parseFloat(document.getElementById("fpGoalCal").value) || 0;
+  document.getElementById("macroLockProteinPct").value = currentMacroPct.protein;
+  document.getElementById("macroLockCarbPct").value = currentMacroPct.carb;
+  document.getElementById("macroLockFatPct").value = currentMacroPct.fat;
+  const grams = macrosFromRatio(calories, currentMacroPct.protein, currentMacroPct.carb, currentMacroPct.fat);
+  document.getElementById("macroLockProteinG").textContent = grams.goalProtein + "g";
+  document.getElementById("macroLockCarbG").textContent = grams.goalCarb + "g";
+  document.getElementById("macroLockFatG").textContent = grams.goalFat + "g";
+  document.getElementById("macroLockTotal").textContent = `${currentMacroPct.protein + currentMacroPct.carb + currentMacroPct.fat}% of ${calories} kcal`;
+}
+
+["macroLockProteinPct", "macroLockCarbPct", "macroLockFatPct"].forEach(id => {
+  document.getElementById(id).addEventListener("input", (e) => {
+    const key = id.includes("Protein") ? "protein" : id.includes("Carb") ? "carb" : "fat";
+    currentMacroPct = rebalanceMacroPct(key, parseFloat(e.target.value) || 0, currentMacroPct);
+    refreshMacroLockDisplay();
+  });
+});
+
+function refreshCyclingInfo() {
+  const calories = parseFloat(document.getElementById("fpGoalCal").value) || 0;
+  const titleEl = document.getElementById("cyclingInfoTitle");
+  const bodyEl = document.getElementById("cyclingInfoBody");
+  if (selectedDietStyle === "carbCycling") {
+    titleEl.textContent = "Carb Cycling";
+    const high = macrosFromRatio(calories, DIET_STYLES.carbCycling.high.protein, DIET_STYLES.carbCycling.high.carb, DIET_STYLES.carbCycling.high.fat);
+    const low = macrosFromRatio(calories, DIET_STYLES.carbCycling.low.protein, DIET_STYLES.carbCycling.low.carb, DIET_STYLES.carbCycling.low.fat);
+    bodyEl.innerHTML = `On training days: P${high.goalProtein}g / C${high.goalCarb}g / F${high.goalFat}g.<br>On rest days: P${low.goalProtein}g / C${low.goalCarb}g / F${low.goalFat}g.<br>Applied automatically based on today's program day.`;
+  } else if (selectedDietStyle === "zigzag") {
+    titleEl.textContent = "Zigzag Calorie Diet";
+    const maintenance = JSON.parse(document.getElementById("fpGoalsPanel").dataset.profile || "{}").maintenanceCalories || calories;
+    const z = zigzagCaloriesForToday(maintenance, calories);
+    bodyEl.innerHTML = `Training days: ~${z.trainDayCal} kcal. Rest days: ~${z.restDayCal} kcal. Weekly average lands on your ${calories} kcal target.`;
+  }
+}
+
+function renderWindowPresets(defaultHours) {
+  const row = document.getElementById("windowPresetRow");
+  const presets = [
+    { label: "16:8", hours: 8 },
+    { label: "18:6", hours: 6 },
+    { label: "20:4", hours: 4 },
+    { label: "OMAD 23:1", hours: 1 },
+    { label: "Custom", hours: null },
+  ];
+  row.innerHTML = presets.map(p => `<button class="window-preset-btn ${p.hours === defaultHours ? "selected" : ""}" data-hours="${p.hours ?? ""}">${p.label}</button>`).join("");
+  row.querySelectorAll(".window-preset-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      row.querySelectorAll(".window-preset-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      const hours = btn.dataset.hours;
+      const customFields = document.getElementById("customWindowFields");
+      if (hours === "") { customFields.style.display = "block"; }
+      else { customFields.style.display = "none"; document.getElementById("windowHours").value = hours; }
+    });
+  });
+}
+
+document.querySelectorAll('input[name="hfSchedule"]').forEach(r => {
+  r.addEventListener("change", () => {}); // value read at save time
+});
+
+document.getElementById("hdVariant").addEventListener("change", updateHyperbolicDietNote);
+function updateHyperbolicDietNote() {
+  const variant = document.getElementById("hdVariant").value;
+  const v = HD_VARIANTS[variant];
+  document.getElementById("hdRotationNote").textContent = `5-day rotation: ${v.dayFractions.map(f => Math.round(f * 100) + "%").join(" / ")} of the weekly total. Today's calories are computed automatically once saved.`;
 }
 
 // ---------- SETUP FLOW ----------
@@ -271,30 +391,49 @@ document.getElementById("fpCalcBtn").addEventListener("click", () => {
   document.getElementById("rateOptionsPanel").style.display = "block";
   selectedRateKey = "maintain";
   renderRateOptions(maintenanceCalories, weightKg);
-
   document.getElementById("fpGoalCal").value = maintenanceCalories;
-  const macros = macrosFromCalories(maintenanceCalories, weightKg);
-  document.getElementById("fpGoalProtein").value = macros.goalProtein;
-  document.getElementById("fpGoalCarb").value = macros.goalCarb;
-  document.getElementById("fpGoalFat").value = macros.goalFat;
-  document.getElementById("fpGoalsPanel").style.display = "block";
 
-  document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify({
-    age, gender, heightCm, weightKg, activity, targetWeightKg, maintenanceCalories, bmi, bmiCategory: category,
-  });
+  setupProfileBase = { age, gender, heightCm, weightKg, activity, targetWeightKg, maintenanceCalories, bmi, bmiCategory: category };
+  document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify(setupProfileBase);
+
+  document.getElementById("dietStylePanel").style.display = "block";
+  renderDietStyleGrid();
+  applyDietStyleSelection();
+  document.getElementById("fpSaveBtn").style.display = "block";
 });
 
 document.getElementById("fpSaveBtn").addEventListener("click", () => {
   const base = JSON.parse(document.getElementById("fpGoalsPanel").dataset.profile || "{}");
-  const profile = {
-    ...base,
-    goalCalories: parseFloat(document.getElementById("fpGoalCal").value),
-    goalProtein: parseFloat(document.getElementById("fpGoalProtein").value),
-    goalCarb: parseFloat(document.getElementById("fpGoalCarb").value),
-    goalFat: parseFloat(document.getElementById("fpGoalFat").value),
-    selectedRate: selectedRateKey,
-  };
+  const style = DIET_STYLES[selectedDietStyle];
+  const profile = { ...base, dietStyle: selectedDietStyle, selectedRate: selectedRateKey };
+
+  if (style.type === "ratio" || style.type === "timing") {
+    const calories = parseFloat(document.getElementById("fpGoalCal").value);
+    const grams = macrosFromRatio(calories, currentMacroPct.protein, currentMacroPct.carb, currentMacroPct.fat);
+    profile.goalCalories = calories;
+    profile.macroPct = { ...currentMacroPct };
+    profile.goalProtein = grams.goalProtein;
+    profile.goalCarb = grams.goalCarb;
+    profile.goalFat = grams.goalFat;
+    if (style.type === "timing") {
+      const selectedPreset = document.querySelector(".window-preset-btn.selected");
+      const hours = selectedPreset && selectedPreset.dataset.hours !== "" ? parseFloat(selectedPreset.dataset.hours) : parseFloat(document.getElementById("windowHours").value);
+      profile.windowHours = hours || style.defaultWindow;
+      profile.windowStart = document.getElementById("windowStartTime").value || "12:00";
+    }
+  } else if (style.type === "cycling" || style.type === "zigzag") {
+    profile.goalCalories = parseFloat(document.getElementById("fpGoalCal").value);
+  } else if (style.type === "hyperbolicFasting") {
+    profile.hfSchedule = document.querySelector('input[name="hfSchedule"]:checked').value;
+    profile.goalCalories = null; // computed daily from the protocol
+  } else if (style.type === "hyperbolicDiet") {
+    profile.hdVariant = document.getElementById("hdVariant").value;
+    profile.hdAnchorDate = profile.hdAnchorDate || todayISO();
+    profile.goalCalories = null; // computed daily from the rotation
+  }
+
   saveFoodProfile(profile);
+  if (typeof setBodyDiagramGender === "function") setBodyDiagramGender(profile.gender);
   showToast("Nutrition profile saved");
   foodSyncPush("Update nutrition profile");
   renderFoodTab();
@@ -318,19 +457,36 @@ document.getElementById("foodEditGoalsBtn").addEventListener("click", () => {
   document.getElementById("rateOptionsPanel").style.display = "block";
   selectedRateKey = p.selectedRate || "maintain";
   renderRateOptions(p.maintenanceCalories, p.weightKg);
+  if (p.goalCalories) document.getElementById("fpGoalCal").value = p.goalCalories;
 
-  document.getElementById("fpGoalCal").value = p.goalCalories;
-  document.getElementById("fpGoalProtein").value = p.goalProtein;
-  document.getElementById("fpGoalCarb").value = p.goalCarb;
-  document.getElementById("fpGoalFat").value = p.goalFat;
-  document.getElementById("fpGoalsPanel").style.display = "block";
+  setupProfileBase = p;
   document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify(p);
+
+  document.getElementById("dietStylePanel").style.display = "block";
+  selectedDietStyle = p.dietStyle || "balanced";
+  if (p.macroPct) currentMacroPct = { ...p.macroPct };
+  renderDietStyleGrid();
+  applyDietStyleSelection();
+  if (p.windowHours) {
+    document.getElementById("windowStartTime").value = p.windowStart || "12:00";
+    document.getElementById("windowHours").value = p.windowHours;
+  }
+  if (p.hfSchedule === "buildMuscle") document.getElementById("hfScheduleBuild").checked = true;
+  if (p.hdVariant) document.getElementById("hdVariant").value = p.hdVariant;
+  document.getElementById("fpSaveBtn").style.display = "block";
 });
 
 // ---------- MAIN FOOD TAB RENDER ----------
+function isProfileComplete(profile) {
+  if (!profile || !profile.dietStyle || !profile.heightCm || !profile.weightKg) return false;
+  const style = DIET_STYLES[profile.dietStyle];
+  if (style && (style.type === "hyperbolicFasting" || style.type === "hyperbolicDiet")) return true;
+  return !!profile.goalCalories;
+}
+
 function renderFoodTab() {
   const profile = loadFoodProfile();
-  if (!profile || !profile.goalCalories) {
+  if (!isProfileComplete(profile)) {
     document.getElementById("foodSetup").style.display = "block";
     document.getElementById("foodDaily").style.display = "none";
     return;
@@ -351,6 +507,53 @@ document.getElementById("foodNextDay").addEventListener("click", () => {
 
 function logsForDate(date) { return foodLogs.filter(l => l.date === date); }
 
+// Compute today's effective calorie + macro targets given the selected diet style.
+function todaysGoals(profile) {
+  const style = DIET_STYLES[profile.dietStyle] || DIET_STYLES.balanced;
+  let goalCalories = profile.goalCalories;
+  let goalProtein = profile.goalProtein;
+  let goalCarb = profile.goalCarb;
+  let goalFat = profile.goalFat;
+  let statusHtml = "";
+
+  if (style.type === "cycling") {
+    const m = carbCyclingMacrosForToday(profile.goalCalories);
+    goalProtein = m.goalProtein; goalCarb = m.goalCarb; goalFat = m.goalFat;
+    statusHtml = `<div class="fasting-status-banner open">${m.dayLabel} — P${goalProtein}g / C${goalCarb}g / F${goalFat}g</div>`;
+  } else if (style.type === "zigzag") {
+    const z = zigzagCaloriesForToday(profile.maintenanceCalories, profile.goalCalories);
+    goalCalories = z.todayCal;
+    const m = macrosFromRatio(goalCalories, 25, 45, 30);
+    goalProtein = m.goalProtein; goalCarb = m.goalCarb; goalFat = m.goalFat;
+    statusHtml = `<div class="fasting-status-banner open">${z.dayLabel} — ${goalCalories} kcal today</div>`;
+  } else if (style.type === "timing") {
+    const status = eatingWindowStatus(profile.windowStart || "12:00", profile.windowHours || 8);
+    statusHtml = `<div class="fasting-status-banner ${status.open ? "open" : "closed"}">${status.label}</div>`;
+  } else if (style.type === "hyperbolicFasting") {
+    const isFastingDay = isHyperbolicFastingDayToday(profile.hfSchedule);
+    const plan = hyperbolicFastingMealPlan(profile.heightCm, isFastingDay);
+    goalCalories = null;
+    statusHtml = `<div class="fasting-status-banner ${isFastingDay ? "closed" : "open"}">${plan.dayType}</div>` +
+      plan.meals.map(m => `<div class="hyperbolic-meal-card"><div class="hyperbolic-meal-name">${m.name}</div><div class="hyperbolic-meal-detail">${m.detail}</div></div>`).join("") +
+      `<div class="hyperbolic-meal-card"><div class="hyperbolic-meal-name">Post-Workout</div><div class="hyperbolic-meal-detail">${plan.postWorkout}</div></div>` +
+      (plan.rule ? `<div class="bento-sub" style="margin-top:8px;">${plan.rule}</div>` : "");
+    goalProtein = null; goalCarb = null; goalFat = null;
+  } else if (style.type === "hyperbolicDiet") {
+    if (!profile.hdAnchorDate) profile.hdAnchorDate = todayISO();
+    const rotIdx = hyperbolicDietRotationIndex(profile.hdAnchorDate);
+    goalCalories = hyperbolicDietDayCalories(profile.maintenanceCalories, profile.hdVariant, rotIdx);
+    const split = hyperbolicDietMealSplit(goalCalories, profile.heightCm);
+    statusHtml = `<div class="fasting-status-banner open">Rotation day ${rotIdx + 1} of 5 — ${goalCalories} kcal today</div>` +
+      `<div class="hyperbolic-meal-card"><div class="hyperbolic-meal-name">Meal 1</div><div class="hyperbolic-meal-detail">${split.meal1.proteinG}g protein — ${split.meal1.note}</div></div>` +
+      `<div class="hyperbolic-meal-card"><div class="hyperbolic-meal-name">Post-Workout</div><div class="hyperbolic-meal-detail">${split.postWorkout.proteinG}g protein — ${split.postWorkout.note}</div></div>` +
+      `<div class="hyperbolic-meal-card"><div class="hyperbolic-meal-name">Dinner</div><div class="hyperbolic-meal-detail">${split.dinner.proteinG}g protein — ${split.dinner.note}</div></div>` +
+      `<div class="bento-sub" style="margin-top:8px;">${split.rest}</div>`;
+    goalProtein = null; goalCarb = null; goalFat = null;
+  }
+
+  return { goalCalories, goalProtein, goalCarb, goalFat, statusHtml };
+}
+
 function renderFoodDaily() {
   const profile = loadFoodProfile();
   const dateLabel = document.getElementById("foodDateLabel");
@@ -366,26 +569,33 @@ function renderFoodDaily() {
     Object.keys(totals.micros).forEach(k => { totals.micros[k] += (l.micros && l.micros[k]) || 0; });
   });
 
-  drawCalorieDial(totals.calories, profile.goalCalories);
+  const goals = todaysGoals(profile);
+  document.getElementById("dietStatusPanel").innerHTML = goals.statusHtml;
+
+  drawCalorieDial(totals.calories, goals.goalCalories || profile.maintenanceCalories || 2000);
 
   const bmiInfo = calcBMI(profile.weightKg, profile.heightCm);
   drawBMIGauge(document.getElementById("bmiGaugeDaily"), bmiInfo.bmi);
   document.getElementById("bmiGaugeValueDaily").innerHTML = `BMI = ${bmiInfo.bmi} <span class="bmi-cat">${bmiInfo.category}</span>`;
 
-  const goalTypeLabel = profile.goalType === "lose" ? "Losing weight" : profile.goalType === "gain" ? "Gaining weight" : "Maintaining";
-  document.getElementById("goalLabelDaily").textContent = "Goal";
-  document.getElementById("goalValueDaily").textContent = profile.goalCalories + " kcal";
-  let goalSub = goalTypeLabel;
-  if (profile.goalType !== "maintain" && profile.targetWeightKg) {
-    goalSub += ` · target ${profile.targetWeightKg}kg`;
+  document.getElementById("goalLabelDaily").textContent = "Diet style";
+  document.getElementById("goalValueDaily").textContent = (DIET_STYLES[profile.dietStyle] || DIET_STYLES.balanced).label;
+  document.getElementById("goalSubDaily").textContent = goals.goalCalories ? `${goals.goalCalories} kcal today` : "See breakdown below";
+
+  if (goals.goalProtein != null) {
+    document.getElementById("proteinRing").parentElement.style.display = "block";
+    drawMacroRing("proteinRing", totals.protein, goals.goalProtein, "#FF6B4A");
+    drawMacroRing("carbRing", totals.carbs, goals.goalCarb, "#4A9EFF");
+    drawMacroRing("fatRing", totals.fat, goals.goalFat, "#FFC94A");
+    document.getElementById("proteinRingValue").textContent = `${Math.round(totals.protein)}/${goals.goalProtein}g`;
+    document.getElementById("carbRingValue").textContent = `${Math.round(totals.carbs)}/${goals.goalCarb}g`;
+    document.getElementById("fatRingValue").textContent = `${Math.round(totals.fat)}/${goals.goalFat}g`;
+  } else {
+    // Hyperbolic protocols: macros come from the meal-by-meal breakdown, not a fixed ring
+    document.getElementById("proteinRingValue").textContent = `${Math.round(totals.protein)}g logged`;
+    document.getElementById("carbRingValue").textContent = `${Math.round(totals.carbs)}g logged`;
+    document.getElementById("fatRingValue").textContent = `${Math.round(totals.fat)}g logged`;
   }
-  document.getElementById("goalSubDaily").textContent = goalSub;
-  drawMacroRing("proteinRing", totals.protein, profile.goalProtein, "#FF6B4A");
-  drawMacroRing("carbRing", totals.carbs, profile.goalCarb, "#4A9EFF");
-  drawMacroRing("fatRing", totals.fat, profile.goalFat, "#FFC94A");
-  document.getElementById("proteinRingValue").textContent = `${Math.round(totals.protein)}/${profile.goalProtein}g`;
-  document.getElementById("carbRingValue").textContent = `${Math.round(totals.carbs)}/${profile.goalCarb}g`;
-  document.getElementById("fatRingValue").textContent = `${Math.round(totals.fat)}/${profile.goalFat}g`;
 
   const weightEntry = weightLogs.find(w => w.date === currentFoodDate);
   document.getElementById("dailyWeightInput").value = weightEntry ? weightEntry.weightKg : "";
