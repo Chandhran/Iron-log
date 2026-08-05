@@ -111,7 +111,7 @@ async function syncPullAndApply() {
     setSyncStatus(`Connected to ${cfg.owner}/${cfg.repo}`, "connected");
     renderRail();
     renderDayContent();
-    renderDashboard("dashboard-train");
+    if (document.getElementById("dashboard-home")) renderDashboard("dashboard-home");
     renderDashboard("dashboard-progress");
     if (typeof foodSyncPullAndApply === "function") foodSyncPullAndApply();
   } catch (e) {
@@ -198,9 +198,16 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.add("active");
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "home" && typeof renderHomeTab === "function") renderHomeTab();
     if (btn.dataset.view === "progress") renderProgressTab();
     if (btn.dataset.view === "history") renderHistory();
     if (btn.dataset.view === "food" && typeof renderFoodTab === "function") renderFoodTab();
+    if (btn.dataset.view === "train") {
+      renderRail();
+      renderPhaseLabel();
+      renderDayStrip();
+      renderDayContent();
+    }
   });
 });
 
@@ -242,13 +249,34 @@ if (typeof EXERCISE_DATABASE !== "undefined") {
 function findAlternatives(exerciseName, limit = 8) {
   const muscle = EXERCISE_MUSCLE[exerciseName];
   const pattern = EXERCISE_PATTERN[exerciseName];
-  if (!muscle || !pattern) return [];
-  const pool = new Set(Object.keys(EXERCISE_MUSCLE));
-  pool.delete(exerciseName);
-  const matches = Array.from(pool).filter(name =>
-    EXERCISE_MUSCLE[name] === muscle && EXERCISE_PATTERN[name] === pattern
-  );
-  return matches.slice(0, limit);
+  const results = new Set();
+
+  // 1) Explicit substitutions from the FBHF sub table (highest priority)
+  if (typeof poolSubstitutionsFor === "function") {
+    poolSubstitutionsFor(exerciseName).forEach(alt => {
+      if (alt && alt !== exerciseName) results.add(alt);
+    });
+  }
+
+  // 2) Pool-based same-muscle same-pattern exercises
+  if (typeof EXERCISE_POOL_BY_MUSCLE !== "undefined" && muscle) {
+    const musclePool = EXERCISE_POOL_BY_MUSCLE[muscle] || [];
+    musclePool.forEach(e => {
+      if (e.name === exerciseName) return;
+      if (pattern && e.pattern === pattern) results.add(e.name);
+    });
+  }
+
+  // 3) Legacy same-muscle same-pattern from the local lookup
+  if (muscle && pattern) {
+    const pool = new Set(Object.keys(EXERCISE_MUSCLE));
+    pool.delete(exerciseName);
+    Array.from(pool)
+      .filter(name => EXERCISE_MUSCLE[name] === muscle && EXERCISE_PATTERN[name] === pattern)
+      .forEach(name => results.add(name));
+  }
+
+  return Array.from(results).slice(0, limit);
 }
 
 // ---------- DATE HELPERS ----------
@@ -469,8 +497,8 @@ function startClock(targetId) {
 function renderRail() {
   const rail = document.getElementById("weekRail");
   rail.innerHTML = "";
-  for (let w = 1; w <= TOTAL_WEEKS; w++) {
-    const phase = phaseForWeek(w);
+  for (let w = 1; w <= getTotalWeeks(); w++) {
+    const phase = getPhaseForWeek(w);
     const block = document.createElement("div");
     block.className = "rail-block " + phase;
     if (w === state.week) block.classList.add("active");
@@ -489,15 +517,32 @@ function renderRail() {
 }
 
 function renderPhaseLabel() {
-  const phase = phaseForWeek(state.week);
-  const label = phase === "strength" ? "Strength" : "Hypertrophy";
-  document.getElementById("phaseLabel").textContent = `Week ${state.week} · ${label}`;
+  const el = document.getElementById("phaseLabel");
+  if (!el) return;
+  const noProgram = (typeof hasProgramConfigured === "function" && !hasProgramConfigured())
+    || (typeof PROGRAM === "undefined" || !PROGRAM || Object.keys(PROGRAM).length === 0);
+  if (noProgram) {
+    el.textContent = "No program yet";
+    return;
+  }
+  const phase = getPhaseForWeek(state.week);
+  const label = phase === "strength" ? "Strength" : (phase === "hypertrophy" ? "Hypertrophy" : "Main");
+  el.textContent = `Week ${state.week} · ${label}`;
 }
 
 // ---------- DAY STRIP ----------
 function renderDayStrip() {
-  const phase = PROGRAM[phaseForWeek(state.week)];
   const strip = document.getElementById("dayStrip");
+  if (!strip) return;
+  const noProgram = (typeof hasProgramConfigured === "function" && !hasProgramConfigured())
+    || (typeof PROGRAM === "undefined" || !PROGRAM || Object.keys(PROGRAM).length === 0);
+  if (noProgram) {
+    strip.innerHTML = "";
+    renderDayContent();
+    return;
+  }
+  const phase = PROGRAM[getPhaseForWeek(state.week)];
+  if (!phase || !phase.days) { strip.innerHTML = ""; renderDayContent(); return; }
   strip.innerHTML = "";
   phase.days.forEach((day, i) => {
     const btn = document.createElement("button");
@@ -543,9 +588,26 @@ function renderTimingLine(session) {
 }
 
 function renderDayContent() {
-  const phase = PROGRAM[phaseForWeek(state.week)];
-  const day = phase.days[state.dayIndex];
   const container = document.getElementById("dayContent");
+  if (!container) return;
+  // Guard: no program set up yet — show hint to build one
+  const noProgram = (typeof hasProgramConfigured === "function" && !hasProgramConfigured())
+    || (typeof PROGRAM === "undefined" || !PROGRAM || Object.keys(PROGRAM).length === 0);
+  if (noProgram) {
+    container.innerHTML = `
+      <div class="exercise-card" style="text-align:center; padding:32px 16px;">
+        <div style="font-size:15px; margin-bottom:8px;">No routine yet</div>
+        <div class="task-note" style="margin-bottom:20px;">Head to the <strong>Home</strong> tab and tap "Build your workout routine" to answer a few questions and generate a program.</div>
+        <button class="save-btn" onclick="document.querySelector('[data-view=&quot;home&quot;]').click()">Go to Home</button>
+      </div>`;
+    return;
+  }
+  const phase = PROGRAM[getPhaseForWeek(state.week)];
+  if (!phase || !phase.days || !phase.days[state.dayIndex]) {
+    container.innerHTML = `<div class="exercise-card"><div class="task-note">This day is not defined in your program.</div></div>`;
+    return;
+  }
+  const day = phase.days[state.dayIndex];
   container.innerHTML = "";
 
   const existing = findSession(state.week, day.name);
@@ -558,6 +620,31 @@ function renderDayContent() {
   container.appendChild(header);
   renderTimingLine(existing);
 
+  // ---- Program-complete flow ----
+  // On the last training day of the last week, show a "Mark Program Complete" button.
+  const totalWeeks = getTotalWeeks();
+  const isLastWeek = (state.week === totalWeeks);
+  // Determine the last training day of the current phase
+  const trainingDayIndexes = phase.days
+    .map((d, i) => d.type === "training" ? i : -1)
+    .filter(i => i >= 0);
+  const isLastTrainingDay = trainingDayIndexes.length > 0
+    && state.dayIndex === trainingDayIndexes[trainingDayIndexes.length - 1];
+  if (isLastWeek && isLastTrainingDay && day.type === "training") {
+    const completeBtn = document.createElement("div");
+    completeBtn.className = "program-complete-cta";
+    completeBtn.innerHTML = `
+      <div class="pc-title">Final training day of your ${totalWeeks}-week program</div>
+      <div class="pc-sub">When you're done, mark the program complete to unlock full analytics and pick what's next.</div>
+      <button class="pc-btn" id="markCompleteBtn">Mark Program Complete</button>
+    `;
+    container.appendChild(completeBtn);
+    setTimeout(() => {
+      const btn = document.getElementById("markCompleteBtn");
+      if (btn) btn.addEventListener("click", handleMarkProgramComplete);
+    }, 30);
+  }
+
   if (day.type === "rest") {
     let currentSession = existing;
     const box = document.createElement("div");
@@ -566,13 +653,41 @@ function renderDayContent() {
       const row = document.createElement("label");
       row.className = "task-row task-row-check";
       const checked = currentSession?.tasksDone?.[i] ? "checked" : "";
+      const hasMoves = t.mobility_moves && t.mobility_moves.length > 0;
       row.innerHTML = `
         <span class="task-check-left">
           <input type="checkbox" data-task="${i}" ${checked}>
           <span>${t.task}</span>
         </span>
-        <span class="task-note">${t.notes}</span>`;
+        <span class="task-note">${t.notes || ""}</span>`;
       box.appendChild(row);
+
+      if (hasMoves) {
+        const movesBox = document.createElement("div");
+        movesBox.className = "mobility-moves-box";
+        movesBox.innerHTML = `
+          <button class="mobility-toggle">
+            <span>View drills (${t.mobility_moves.length})</span>
+            <span class="mobility-arrow">▸</span>
+          </button>
+          <div class="mobility-moves-body" style="display:none;">
+            ${t.mobility_moves.map(m => `
+              <div class="mobility-move-line">
+                <span class="move-name">${m.name}</span>
+                <span class="move-target">${m.sets || 1}${m.reps ? "×" + m.reps : ""}${m.hold ? " · hold " + m.hold : ""}</span>
+              </div>`).join("")}
+          </div>`;
+        box.appendChild(movesBox);
+        const toggle = movesBox.querySelector(".mobility-toggle");
+        const bodyEl = movesBox.querySelector(".mobility-moves-body");
+        const arrow = movesBox.querySelector(".mobility-arrow");
+        toggle.addEventListener("click", (e) => {
+          e.preventDefault();
+          const open = bodyEl.style.display !== "none";
+          bodyEl.style.display = open ? "none" : "block";
+          arrow.textContent = open ? "▸" : "▾";
+        });
+      }
     });
     container.appendChild(box);
 
@@ -590,7 +705,7 @@ function renderDayContent() {
             renderRail();
             updateLoggedBadge(false);
             renderTimingLine(null);
-            renderDashboard("dashboard-train");
+            if (document.getElementById("dashboard-home")) renderDashboard("dashboard-home");
             renderDashboard("dashboard-progress");
             syncPush(`Clear rest day — Week ${state.week} ${day.name}`);
           }
@@ -613,7 +728,7 @@ function renderDayContent() {
         renderRail();
         updateLoggedBadge(true);
         renderTimingLine(currentSession);
-        renderDashboard("dashboard-train");
+        if (document.getElementById("dashboard-home")) renderDashboard("dashboard-home");
         renderDashboard("dashboard-progress");
         syncPush(`Rest day — Week ${state.week} ${day.name}`);
       });
@@ -675,6 +790,38 @@ function renderDayContent() {
     if (altChips.length) {
       altBar.innerHTML = `<div class="alt-bar-label">No equipment? Swap:</div><div class="alt-chip-row">${altChips.join("")}</div>`;
       card.appendChild(altBar);
+    }
+
+    // Technique cues (from pool). Collapsible — hidden by default, tap to expand.
+    let cues = (ex.technique_cues && ex.technique_cues.length ? ex.technique_cues : null);
+    if (!cues && typeof poolLookup === "function") {
+      const pooled = poolLookup(effectiveName);
+      if (pooled && pooled.technique_cues && pooled.technique_cues.length) {
+        cues = pooled.technique_cues;
+      }
+    }
+    if (cues) {
+      const cuesBox = document.createElement("div");
+      cuesBox.className = "cues-box";
+      cuesBox.innerHTML = `
+        <button class="cues-toggle" data-ex-idx="${exIdx}">
+          <span class="cues-toggle-label">Technique cues</span>
+          <span class="cues-toggle-arrow">▸</span>
+        </button>
+        <div class="cues-body" style="display:none;">
+          ${cues.map(c => `<div class="cue-line">• ${c}</div>`).join("")}
+        </div>`;
+      card.appendChild(cuesBox);
+      setTimeout(() => {
+        const toggle = cuesBox.querySelector(".cues-toggle");
+        const body = cuesBox.querySelector(".cues-body");
+        const arrow = cuesBox.querySelector(".cues-toggle-arrow");
+        toggle.addEventListener("click", () => {
+          const open = body.style.display !== "none";
+          body.style.display = open ? "none" : "block";
+          arrow.textContent = open ? "▸" : "▾";
+        });
+      }, 0);
     }
 
     // Warm-up rows (checkbox only, no weight/reps needed)
@@ -782,7 +929,7 @@ function renderDayContent() {
         renderRail();
         updateLoggedBadge(false);
         renderTimingLine(null);
-        renderDashboard("dashboard-train");
+        if (document.getElementById("dashboard-home")) renderDashboard("dashboard-home");
         renderDashboard("dashboard-progress");
         syncPush(`Clear — Week ${state.week} ${day.name}`);
       }
@@ -806,14 +953,31 @@ function renderDayContent() {
     updateLoggedBadge(true);
     renderTimingLine(currentSession);
     showToast("Saved");
-    renderDashboard("dashboard-train");
-    renderDashboard("dashboard-progress");
+    if (document.getElementById("dashboard-home")) renderDashboard("dashboard-home");
+    if (document.getElementById("dashboard-progress")) renderDashboard("dashboard-progress");
     syncPush(`${day.title} — Week ${state.week} ${day.name}`);
   }, 700);
 
   container.querySelectorAll(".set-row input").forEach(inp => {
     inp.addEventListener("input", doAutosave);
   });
+
+  // ---- Companion session block (for generated programs that were split) ----
+  if (day.companion && day.companion.exercises && day.companion.exercises.length > 0) {
+    const companion = document.createElement("div");
+    companion.className = "companion-session-card";
+    companion.innerHTML = `
+      <div class="companion-session-title">${day.companion.title || "Companion session"}</div>
+      <div class="companion-session-notes">${day.companion.notes || ""}</div>
+      ${day.companion.exercises.map(ex =>
+        `<div class="companion-exercise-line">
+          <strong>${ex.name}</strong>
+          <span class="ex-target">${ex.target || ""}</span>
+        </div>`
+      ).join("")}
+    `;
+    container.appendChild(companion);
+  }
 }
 
 // ---------- PROGRESS TAB ----------
@@ -925,10 +1089,13 @@ function renderMuscleBarChart() {
       responsive: true,
       plugins: { legend: { display: true, labels: { color: "#9b9890", font: { size: 10 } } } },
       scales: {
-        x: { ticks: { color: "#9b9890", font: { size: 9 } }, grid: { display: false } },
+        x: {
+          ticks: { color: "#9b9890", font: { size: 9 } }, grid: { display: false },
+          title: { display: true, text: "Muscle group", color: "#9b9890", font: { size: 10 } },
+        },
         y: {
           ticks: { color: "#9b9890" }, grid: { color: "#2e2e2e" }, beginAtZero: true, suggestedMax: Math.ceil(maxVal * 1.2),
-          title: { display: true, text: "Sets", color: "#9b9890", font: { size: 10 } },
+          title: { display: true, text: "Working sets", color: "#9b9890", font: { size: 10 } },
         }
       }
     }
@@ -1036,27 +1203,189 @@ function renderHistory() {
 
   list.querySelectorAll(".history-del").forEach(btn => {
     btn.addEventListener("click", () => {
-      sessions = sessions.filter(s => s.id !== btn.dataset.id);
-      saveSessions(sessions);
-      renderHistory();
-      renderRail();
-      renderDayContent();
-      renderDashboard("dashboard-train");
-      renderDashboard("dashboard-progress");
-      syncPush("Delete session");
+      const session = sessions.find(s => s.id === btn.dataset.id);
+      const setCount = session && !session.rest
+        ? session.exercises.reduce((sum, ex) => sum + (ex.sets || []).length, 0)
+        : 0;
+
+      // If session has no logged sets, delete directly with a single tap confirmation
+      const doDelete = () => {
+        sessions = sessions.filter(s => s.id !== btn.dataset.id);
+        saveSessions(sessions);
+        renderHistory();
+        renderRail();
+        renderDayContent();
+        if (document.getElementById("dashboard-home")) renderDashboard("dashboard-home");
+        if (document.getElementById("dashboard-progress")) renderDashboard("dashboard-progress");
+        syncPush("Delete session");
+      };
+
+      if (setCount === 0) {
+        confirmAction({
+          title: "Delete this rest day / empty session?",
+          body: "Nothing was logged in this entry.",
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          danger: false,
+          onConfirm: doDelete,
+        });
+      } else {
+        confirmAction({
+          title: "Delete this session?",
+          body: `This session has <strong>${setCount} logged set${setCount === 1 ? "" : "s"}</strong>. Deletion is permanent.`,
+          confirmLabel: "Yes, delete",
+          cancelLabel: "Cancel",
+          danger: true,
+          onConfirm: doDelete,
+        });
+      }
     });
   });
 }
 
+// ---------- PROGRAM COMPLETE FLOW ----------
+function handleMarkProgramComplete() {
+  const sessionCount = countActiveSessions();
+  const cfg = loadConfig() || {};
+  const totalWeeks = getTotalWeeks();
+  confirmAction({
+    title: "Mark program complete?",
+    body: `
+      <p>You'll archive this <strong>${totalWeeks}-week program</strong> with all <strong>${sessionCount} sessions</strong> logged.</p>
+      <p>Your data stays. You'll get full analytics, and can then choose to run this program again or build a new one.</p>
+    `,
+    confirmLabel: "Yes, complete it",
+    cancelLabel: "Not yet",
+    danger: false,
+    onConfirm: () => {
+      const archive = archiveActiveProgram(sessionCount);
+      if (archive) {
+        showToast("Program archived. Full analytics ready in Progress.");
+        // Open post-complete choice: rerun same program OR build new
+        setTimeout(() => showProgramCompleteChoice(archive), 500);
+      }
+    },
+  });
+}
+
+function showProgramCompleteChoice(archive) {
+  const savedProgram = archive.program; // preserve to re-run
+  const body = `
+    <p>Nice work. What next?</p>
+    <div class="choice-row">
+      <button class="choice-btn" id="rerunBtn">
+        <strong>Run the same program again</strong>
+        <span>Fresh log, same routine, week 1 day 1.</span>
+      </button>
+      <button class="choice-btn" id="newBuildBtn">
+        <strong>Build a new program</strong>
+        <span>Answer the intake questions again.</span>
+      </button>
+    </div>
+  `;
+  confirmAction({
+    title: "Program complete!",
+    body,
+    confirmLabel: "Close",
+    cancelLabel: "Later",
+    danger: false,
+    onConfirm: () => {},
+  });
+  setTimeout(() => {
+    const rerunBtn = document.getElementById("rerunBtn");
+    const newBuildBtn = document.getElementById("newBuildBtn");
+    if (rerunBtn) rerunBtn.addEventListener("click", () => {
+      document.getElementById("confirm-modal-overlay")?.remove();
+      // Restore the archived program as the active one, clear sessions (fresh log)
+      saveActiveProgram(savedProgram);
+      const oldCfg = loadConfig() || {};
+      saveConfig({
+        ...oldCfg,
+        program_configured: true,
+        created_at: new Date().toISOString(),
+        program_id: (savedProgram._id || oldCfg.program_id) + "_rerun_" + Date.now(),
+      });
+      // Reset session log (archived copy already preserved in archives)
+      sessions.length = 0;
+      saveSessions(sessions);
+      state.week = 1; state.dayIndex = 0;
+      saveState(state);
+      showToast("Program restarted from Week 1 Day 1");
+      setTimeout(() => location.reload(), 400);
+    });
+    if (newBuildBtn) newBuildBtn.addEventListener("click", () => {
+      document.getElementById("confirm-modal-overlay")?.remove();
+      // Program is already archived. Just clear the active program state.
+      clearActiveProgram();
+      sessions.length = 0;
+      saveSessions(sessions);
+      state.week = 1; state.dayIndex = 0;
+      saveState(state);
+      if (typeof launchIntake === "function") launchIntake();
+      else location.reload();
+    });
+    const defConfirm = document.getElementById("confirm-modal-confirm");
+    if (defConfirm) defConfirm.style.display = "none";
+  }, 60);
+}
+
 // ---------- INIT ----------
+// Legacy program migration + storage setup runs before anything else touches PROGRAM.
+if (typeof migrateLegacyProgramIfNeeded === "function") {
+  migrateLegacyProgramIfNeeded();
+  activateStoredProgram();
+}
+
+// Year rollover check (for sharded sync)
+if (typeof checkYearRollover === "function") checkYearRollover();
+
+// Rebuild EXERCISE_* lookups now that PROGRAM might have changed
+function rebuildExerciseLookups() {
+  Object.keys(EXERCISE_MUSCLE).forEach(k => delete EXERCISE_MUSCLE[k]);
+  Object.keys(EXERCISE_SECONDARY).forEach(k => delete EXERCISE_SECONDARY[k]);
+  Object.keys(EXERCISE_PATTERN).forEach(k => delete EXERCISE_PATTERN[k]);
+  Object.keys(EXERCISE_COMPOUND).forEach(k => delete EXERCISE_COMPOUND[k]);
+  Object.keys(EXERCISE_TARGET).forEach(k => delete EXERCISE_TARGET[k]);
+  if (typeof PROGRAM === "undefined" || !PROGRAM) return;
+  Object.values(PROGRAM).forEach(phase => {
+    if (!phase || !phase.days) return;
+    phase.days.forEach(day => {
+      if (day.type === "training" && day.exercises) {
+        day.exercises.forEach(ex => {
+          EXERCISE_MUSCLE[ex.name] = ex.muscle;
+          EXERCISE_SECONDARY[ex.name] = ex.secondary || [];
+          EXERCISE_PATTERN[ex.name] = ex.pattern || "";
+          EXERCISE_COMPOUND[ex.name] = !!ex.compound;
+          EXERCISE_TARGET[ex.name] = ex.target;
+        });
+      }
+    });
+  });
+  if (typeof EXERCISE_DATABASE !== "undefined") {
+    EXERCISE_DATABASE.forEach(ex => {
+      if (!(ex.name in EXERCISE_MUSCLE)) {
+        EXERCISE_MUSCLE[ex.name] = ex.muscle;
+        EXERCISE_SECONDARY[ex.name] = ex.secondary || [];
+        EXERCISE_PATTERN[ex.name] = ex.pattern || "";
+        EXERCISE_COMPOUND[ex.name] = !!ex.compound;
+      }
+    });
+  }
+}
+rebuildExerciseLookups();
+
 setTimeout(() => {
   if (typeof loadFoodProfile === "function") {
     const fp = loadFoodProfile();
-    if (fp?.gender) { setBodyDiagramGender(fp.gender); renderDashboard("dashboard-train"); }
+    if (fp?.gender) { setBodyDiagramGender(fp.gender); }
   }
+  if (typeof renderHomeTab === "function") renderHomeTab();
 }, 0);
-renderDashboard("dashboard-train");
-renderRail();
-renderPhaseLabel();
-renderDayStrip();
+
+// Only render Train content if a program is configured
+if (hasProgramConfigured && hasProgramConfigured()) {
+  renderRail();
+  renderPhaseLabel();
+  renderDayStrip();
+}
 if (loadSyncConfig()) syncPullAndApply();

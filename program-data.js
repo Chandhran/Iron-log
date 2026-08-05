@@ -2,7 +2,7 @@
 // "Week 2 (HYPERTROPHY)" pages. These two templates alternate across the
 // full 16-week block: odd weeks = strength, even weeks = hypertrophy.
 
-const PROGRAM = {
+var PROGRAM = {
   strength: {
     key: "strength",
     label: "Strength",
@@ -144,12 +144,12 @@ const PROGRAM = {
   }
 };
 
-const TOTAL_WEEKS = 16;
+var TOTAL_WEEKS = 16;
 
 // Anatomical muscle metadata: primary color + a lighter glow variant used for
 // secondary/assisting muscles, which body silhouette view shows it, and which
 // region id on that silhouette lights up (see body-diagrams.js)
-const MUSCLE_INFO = {
+var MUSCLE_INFO = {
   "Pectoralis Major":   { color: "#FF6B4A", light: "#FFB09C", view: "front", region: "chest" },
   "Latissimus Dorsi":   { color: "#4A9EFF", light: "#A8CFFF", view: "back",  region: "lats" },
   "Trapezius":          { color: "#37D6C4", light: "#9CEEE3", view: "back",  region: "traps" },
@@ -174,7 +174,7 @@ const MUSCLE_INFO = {
 };
 
 // Display order for the weekly muscle calculator
-const MUSCLE_ORDER = [
+var MUSCLE_ORDER = [
   "Pectoralis Major", "Latissimus Dorsi", "Trapezius", "Rhomboids", "Erector Spinae",
   "Anterior Deltoid", "Lateral Deltoid", "Posterior Deltoid",
   "Biceps Brachii", "Triceps Brachii",

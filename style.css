@@ -837,3 +837,382 @@ select{
   text-align:right;
 }
 .rate-option-pct{font-size:0.68rem; color:var(--chalk-dim); text-align:right; margin-top:2px;}
+
+/* ============================================
+   NEW: Home tab, welcome, intake, confirmations
+   ============================================ */
+
+/* ---- Home tab welcome hero ---- */
+.welcome-hero {
+  padding: 24px 18px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin: 20px 0;
+  text-align: center;
+}
+.welcome-hero-title {
+  font-size: 1.4rem; font-weight: 800; color: var(--chalk);
+  margin-bottom: 8px;
+}
+.welcome-hero-sub {
+  font-size: 0.9rem; color: var(--chalk-dim); line-height: 1.5;
+  max-width: 480px; margin: 0 auto;
+}
+
+.home-actions {
+  padding: 24px 0 40px 0;
+  display: flex; justify-content: center;
+}
+.build-new-btn {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: 12px;
+  padding: 14px 22px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.build-new-btn:hover, .build-new-btn:active {
+  border-color: var(--rust);
+  background: rgba(212, 85, 31, 0.08);
+}
+.build-new-btn.primary {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: #fff;
+  font-weight: 700;
+  padding: 16px 28px;
+  font-size: 0.95rem;
+  box-shadow: 0 0 20px rgba(212, 85, 31, 0.35);
+}
+.build-new-btn.primary:hover, .build-new-btn.primary:active {
+  background: #b0431f;
+  box-shadow: 0 0 24px rgba(212, 85, 31, 0.55);
+}
+
+/* ---- Confirmation modal ---- */
+.confirm-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.confirm-modal-overlay.visible { opacity: 1; }
+.confirm-modal {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px 20px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.confirm-modal-title {
+  font-size: 1.05rem; font-weight: 700; color: var(--chalk);
+  margin-bottom: 10px;
+}
+.confirm-modal-body {
+  font-size: 0.86rem; color: var(--chalk-dim);
+  line-height: 1.55; margin-bottom: 20px;
+}
+.confirm-modal-body strong { color: var(--chalk); }
+.confirm-modal-body p { margin: 0 0 12px 0; }
+.confirm-modal-body p:last-child { margin-bottom: 0; }
+.confirm-modal-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+.confirm-modal-cancel, .confirm-modal-confirm {
+  padding: 11px 18px;
+  border-radius: 9px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--line);
+}
+.confirm-modal-cancel {
+  background: transparent; color: var(--chalk-dim);
+}
+.confirm-modal-cancel:hover, .confirm-modal-cancel:active {
+  color: var(--chalk); border-color: var(--chalk-dim);
+}
+.confirm-modal-confirm {
+  background: var(--rust); border-color: var(--rust); color: #fff;
+}
+.confirm-modal-confirm.danger {
+  background: #b02121; border-color: #b02121;
+}
+.choice-row {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 12px;
+}
+.choice-btn {
+  background: var(--bg-elevated); border: 1px solid var(--line);
+  color: var(--chalk); border-radius: 10px; padding: 12px 14px;
+  cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.choice-btn:hover, .choice-btn:active {
+  border-color: var(--rust);
+}
+.choice-btn strong { font-size: 0.88rem; }
+.choice-btn span { font-size: 0.76rem; color: var(--chalk-dim); }
+.choice-btn.danger:hover, .choice-btn.danger:active {
+  border-color: #b02121;
+  background: rgba(176, 33, 33, 0.08);
+}
+
+/* ---- Intake flow modal ---- */
+.intake-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10, 10, 10, 0.85);
+  z-index: 8500;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.intake-overlay.visible { opacity: 1; }
+.intake-modal {
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  width: 100%; height: 100%;
+  max-width: 640px; max-height: 100%;
+  display: flex; flex-direction: column;
+}
+@media (min-width: 641px) {
+  .intake-modal {
+    border-radius: 14px;
+    max-height: 92vh;
+    height: auto;
+  }
+}
+.intake-progress {
+  height: 4px; background: var(--bg-raised);
+  position: relative; margin: 0;
+}
+.intake-progress-fill {
+  position: absolute; top: 0; left: 0; height: 100%;
+  background: var(--rust);
+  transition: width 0.25s ease;
+}
+.intake-body {
+  flex: 1; overflow-y: auto;
+  padding: 24px 20px;
+}
+.intake-step-title {
+  font-size: 1.3rem; font-weight: 800; color: var(--chalk);
+  margin-bottom: 20px;
+}
+.intake-empty {
+  color: var(--chalk-dim); font-size: 0.9rem; padding: 40px 0;
+  text-align: center;
+}
+.intake-question {
+  margin-bottom: 26px;
+}
+.intake-q-label {
+  font-size: 0.92rem; font-weight: 600; color: var(--chalk);
+  margin-bottom: 12px; line-height: 1.4;
+}
+.intake-opts {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.intake-opt {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.86rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s;
+}
+.intake-opt:hover, .intake-opt:active {
+  border-color: var(--rust);
+}
+.intake-opt.selected {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(212, 85, 31, 0.35);
+}
+.intake-actions {
+  display: flex; gap: 10px; justify-content: space-between;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.intake-back, .intake-next {
+  padding: 12px 20px;
+  border-radius: 9px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.intake-back {
+  background: transparent; border: 1px solid var(--line); color: var(--chalk-dim);
+}
+.intake-back:hover, .intake-back:active {
+  color: var(--chalk); border-color: var(--chalk-dim);
+}
+.intake-next {
+  background: var(--rust); border: 1px solid var(--rust); color: #fff;
+  flex: 1; max-width: 220px;
+}
+.intake-next:hover, .intake-next:active {
+  background: #b0431f;
+}
+
+/* ---- Companion session panel (in day content) ---- */
+.companion-session-card {
+  background: var(--bg-raised);
+  border: 1px dashed var(--rust);
+  border-radius: 10px;
+  padding: 14px 14px;
+  margin-top: 16px;
+}
+.companion-session-title {
+  font-size: 0.88rem; font-weight: 700; color: var(--rust);
+  margin-bottom: 4px;
+}
+.companion-session-notes {
+  font-size: 0.76rem; color: var(--chalk-dim);
+  margin-bottom: 10px; line-height: 1.4;
+}
+.companion-exercise-line {
+  font-size: 0.82rem; color: var(--chalk);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.companion-exercise-line:last-child { border-bottom: none; }
+.companion-exercise-line .ex-target {
+  color: var(--chalk-dim); font-size: 0.76rem; margin-left: 6px;
+}
+
+/* ---- SVG body diagram sizing (new SVGs are much larger natural size) ---- */
+.body-svg, .muscle-map {
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+  display: block;
+}
+.trained-body-col .muscle-map { max-height: 220px; }
+.trained-body-col svg { max-height: 220px; }
+
+/* ---- Program-complete CTA on final day ---- */
+.program-complete-cta {
+  background: linear-gradient(180deg, rgba(212, 85, 31, 0.15), rgba(212, 85, 31, 0.05));
+  border: 1px solid var(--rust);
+  border-radius: 12px;
+  padding: 18px 16px;
+  margin-top: 20px;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(212, 85, 31, 0.2);
+}
+.pc-title {
+  font-size: 0.95rem; font-weight: 700; color: var(--rust);
+  margin-bottom: 6px;
+}
+.pc-sub {
+  font-size: 0.8rem; color: var(--chalk-dim);
+  margin-bottom: 14px; line-height: 1.4;
+}
+.pc-btn {
+  background: var(--rust);
+  border: 1px solid var(--rust);
+  color: #fff;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(212, 85, 31, 0.4);
+}
+.pc-btn:hover, .pc-btn:active {
+  background: #b0431f;
+}
+
+/* ---- Technique cues (collapsible under exercise card) ---- */
+.cues-box {
+  margin: 8px 0 4px;
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cues-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--chalk-dim);
+  padding: 8px 12px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.78rem; font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.cues-toggle:hover, .cues-toggle:active {
+  color: var(--chalk);
+  background: rgba(212, 85, 31, 0.06);
+}
+.cues-toggle-label { letter-spacing: 0.02em; }
+.cues-toggle-arrow {
+  color: var(--rust);
+  font-size: 0.9rem;
+  transition: transform 0.15s;
+}
+.cues-body {
+  padding: 4px 12px 10px;
+  border-top: 1px solid var(--line);
+}
+.cue-line {
+  font-size: 0.78rem;
+  color: var(--chalk-dim);
+  line-height: 1.5;
+  padding: 3px 0;
+}
+
+/* ---- Mobility moves under rest-day tasks ---- */
+.mobility-moves-box {
+  margin: 4px 0 12px;
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.mobility-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--chalk-dim);
+  padding: 8px 12px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; text-align: left;
+}
+.mobility-toggle:hover, .mobility-toggle:active {
+  color: var(--chalk); background: rgba(212, 85, 31, 0.06);
+}
+.mobility-arrow { color: var(--rust); font-size: 0.9rem; }
+.mobility-moves-body {
+  padding: 4px 12px 10px;
+  border-top: 1px solid var(--line);
+}
+.mobility-move-line {
+  display: flex; justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.mobility-move-line:last-child { border-bottom: none; }
+.mobility-move-line .move-name { color: var(--chalk); }
+.mobility-move-line .move-target { color: var(--chalk-dim); }
