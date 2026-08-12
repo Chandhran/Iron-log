@@ -97,14 +97,35 @@ function pickDeeperColor(existing, incoming) {
 }
 
 // Inject per-slug fill overrides into the base SVG via extra CSS rules.
+// Every rendered SVG on the page shares the class .muscle-map, and inline
+// SVG <style> rules apply globally to the document — so if we scoped
+// overrides by class the last rendered exercise's rules would win for
+// every diagram on the page. We give each SVG a unique id and scope all
+// its overrides to that id, so each diagram is fully isolated.
+let __mmScopeCounter = 0;
+function _makeMmScopeId() {
+  __mmScopeCounter += 1;
+  return "mm-" + Date.now().toString(36) + "-" + __mmScopeCounter;
+}
 function paintSvg(baseSvg, highlightMap) {
+  const scopeId = _makeMmScopeId();
+
+  // Add id to the opening <svg ...> tag (first match).
+  const scopedSvg = baseSvg.replace(/<svg\s/, `<svg id="${scopeId}" `);
+
+  // Force gray default INSIDE this scope so leaked rules from other
+  // <style> blocks on the page can't accidentally colour muscles here.
+  const defaultReset =
+    `#${scopeId} [data-muscle] { fill: #3f3f3f; }`;
+
   const overrides = Object.entries(highlightMap)
     .filter(([_, color]) => color)
     .map(([slug, color]) =>
-      `.muscle-map [data-muscle="${slug}"] { fill: ${color}; }`
+      `#${scopeId} [data-muscle="${slug}"] { fill: ${color}; }`
     ).join("\n");
-  if (!overrides) return baseSvg;
-  return baseSvg.replace("</style>", overrides + "\n</style>");
+
+  const injection = [defaultReset, overrides].filter(Boolean).join("\n");
+  return scopedSvg.replace("</style>", injection + "\n</style>");
 }
 
 function getFrontSvg() {
