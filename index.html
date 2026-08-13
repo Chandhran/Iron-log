@@ -59,6 +59,12 @@
   <main id="view-progress" class="view">
     <div class="dashboard" id="dashboard-progress"></div>
 
+    <div class="section-label section-with-action">
+      <span>Body composition</span>
+      <button id="bodyCompImportBtn" class="section-action-btn">Import from scale screenshot</button>
+    </div>
+    <div class="panel" id="bodyCompPanel"></div>
+
     <div class="section-label">Weight trend</div>
     <div class="panel chart-panel">
       <canvas id="weightTrendChart" height="180"></canvas>
@@ -391,6 +397,26 @@
 <script src="body-svgs.js"></script>
 <script src="body-diagrams.js"></script>
 <script src="program-storage.js"></script>
+<!-- Body composition (scale screenshot import) modal -->
+<div id="bodyCompModalOverlay" class="modal-overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <span>Import scale screenshot</span>
+      <button id="bcOcrCloseBtn" class="modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-help">In your Fitdays app, open the "Body Data Report" for the day you want to import, screenshot it (Power + Volume Down), then pick the image below. All fields will be read automatically.</p>
+      <label class="file-picker-btn">
+        Pick screenshot
+        <input type="file" id="bcOcrFileInput" accept="image/*" style="display:none;">
+      </label>
+      <div id="bcOcrStatus" class="ocr-status" style="display:none;"></div>
+      <div id="bcOcrPreview"></div>
+      <div id="bcOcrForm" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
 <script src="year-shard.js"></script>
 <script src="confirmations.js"></script>
 <script src="generator.js"></script>
@@ -399,5 +425,6 @@
 <script src="app.js"></script>
 <script src="diet-styles.js"></script>
 <script src="food.js"></script>
+<script src="body-comp.js"></script>
 </body>
 </html>

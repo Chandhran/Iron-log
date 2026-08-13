@@ -35,14 +35,15 @@ const MUSCLE_TO_SVG = {
   "Calves":           { view: "back",  slug: "calves" },
 };
 
-// Red intensity scale — darker = higher volume, grey = untrained.
+// Blue intensity scale — darker/deeper = higher weekly volume, gray = untrained.
+// Matches the "Less volume / More volume" legend under the Home dashboard.
 const VOLUME_TIER_COLORS = {
   untrained:   "#3f3f3f",
-  veryLow:     "#5a1a1a",
-  low:         "#8b1c1c",
-  moderate:    "#c0392b",
-  high:        "#e74c3c",
-  overreached: "#ff6b6b",
+  veryLow:     "#4a6b8a",
+  low:         "#2c6ba8",
+  moderate:    "#1e5daa",
+  high:        "#0d4a90",
+  overreached: "#062f60",
 };
 
 // Per-muscle MED / MAV top / MRV — pulled from the analysis's volume_rules.
@@ -83,7 +84,7 @@ function volumeTierColor(count, muscleName) {
   return VOLUME_TIER_COLORS.veryLow;
 }
 
-// Pick the deeper red when two muscles share a slug (e.g. Ant+Lat delt → deltoids).
+// Pick the deeper blue when two muscles share a slug (e.g. Ant+Lat delt → deltoids).
 const TIER_RANK = {
   [VOLUME_TIER_COLORS.veryLow]: 1,
   [VOLUME_TIER_COLORS.low]: 2,
@@ -160,13 +161,18 @@ function weeklyVolumeBodyDiagrams(muscleSetCounts) {
 }
 
 // PUBLIC: single-exercise diagram (used in the day's exercise cards).
-function bodyDiagramFor(primaryMuscle, secondaryMuscles = []) {
-  const info = MUSCLE_TO_SVG[primaryMuscle];
+// Returns an ARRAY of { view, svg } — one entry if all target muscles fit on
+// one view, two entries when the primary and secondaries span both sides
+// (e.g. Tire Flip: quads on front, glutes/erectors on back → renders both).
+// Colors: primary = red (#e74c3c), secondary = amber (#f39c12) — chosen for
+// clear hue contrast on a small mobile diagram.
+function bodyDiagramFor(primaryMuscle, secondaryMuscles) {
+  secondaryMuscles = secondaryMuscles || [];
   const primaryColor = "#e74c3c";
-  const secondaryColor = "#8b1c1c";
+  const secondaryColor = "#f39c12";
+
   const frontHighlights = {};
   const backHighlights = {};
-
   const addHighlight = (muscle, color, isPrimary) => {
     const mi = MUSCLE_TO_SVG[muscle];
     if (!mi) return;
@@ -180,8 +186,28 @@ function bodyDiagramFor(primaryMuscle, secondaryMuscles = []) {
   secondaryMuscles.forEach(m => addHighlight(m, secondaryColor, false));
   addHighlight(primaryMuscle, primaryColor, true);
 
-  const svg = (info && info.view === "back")
-    ? paintSvg(getBackSvg(), backHighlights)
-    : paintSvg(getFrontSvg(), frontHighlights);
-  return svg;
+  // Decide which views are needed. Only view-specific muscles (front-only or
+  // back-only) force a view. "Both"-side muscles like Forearms or Trapezius
+  // don't force an extra view on their own — they piggy-back on whatever
+  // views the view-specific muscles select. If ALL muscles are "both", or
+  // there are no known muscles, default to whatever the primary belongs to
+  // (falling back to front).
+  const allMuscles = [primaryMuscle].concat(secondaryMuscles).filter(Boolean);
+  let needsFront = false, needsBack = false;
+  allMuscles.forEach(m => {
+    const mi = MUSCLE_TO_SVG[m];
+    if (!mi) return;
+    if (mi.view === "front") needsFront = true;
+    if (mi.view === "back")  needsBack = true;
+  });
+  if (!needsFront && !needsBack) {
+    const primaryInfo = MUSCLE_TO_SVG[primaryMuscle];
+    if (primaryInfo && primaryInfo.view === "back") needsBack = true;
+    else needsFront = true;
+  }
+
+  const views = [];
+  if (needsFront) views.push({ view: "front", svg: paintSvg(getFrontSvg(), frontHighlights) });
+  if (needsBack)  views.push({ view: "back",  svg: paintSvg(getBackSvg(),  backHighlights) });
+  return views;
 }

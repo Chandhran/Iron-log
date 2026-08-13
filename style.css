@@ -320,6 +320,16 @@ body{
   border:1px solid var(--line);
   border-radius:8px;
   padding:5px;
+  display:flex;
+  gap:4px;
+}
+.exercise-diagram-dual{
+  width:132px;
+}
+.exercise-diagram .mm-view{
+  flex:1 1 0;
+  min-width:0;
+  height:100%;
 }
 .exercise-diagram .body-svg{width:100%;height:100%;display:block;}
 .exercise-name-wrap{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0;}
@@ -1216,3 +1226,180 @@ select{
 .mobility-move-line:last-child { border-bottom: none; }
 .mobility-move-line .move-name { color: var(--chalk); }
 .mobility-move-line .move-target { color: var(--chalk-dim); }
+
+/* ---- Achieved micronutrient goal (row turns green when intake ≥ RDA) ---- */
+.micro-row-met {
+  background: rgba(74, 207, 107, 0.08);
+  border: 1px solid rgba(74, 207, 107, 0.35);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 4px 0;
+}
+.micro-row-met .micro-name {
+  color: #4ACF6B;
+  font-weight: 600;
+}
+.micro-row-met .micro-amount {
+  color: #4ACF6B;
+}
+
+/* ---- Body composition panel (Progress tab) ---- */
+.section-with-action {
+  display:flex; justify-content:space-between; align-items:center;
+  gap:10px;
+}
+.section-action-btn {
+  background: var(--rust);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.section-action-btn:active { transform: scale(0.98); }
+
+.body-comp-empty {
+  padding: 16px;
+  text-align: center;
+}
+.body-comp-empty-title {
+  color: var(--chalk-dim);
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+.body-comp-empty-help {
+  color: var(--chalk-dim);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.body-comp-latest { padding: 12px; }
+.bc-latest-header {
+  display:flex; justify-content:space-between; align-items:baseline;
+  margin-bottom: 10px;
+}
+.bc-latest-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--chalk);
+}
+.bc-latest-date {
+  font-size: 0.75rem;
+  color: var(--chalk-dim);
+}
+.bc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 12px;
+}
+.bc-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+}
+.bc-label { color: var(--chalk-dim); }
+.bc-value { color: var(--chalk); font-weight: 500; }
+.bc-count-note {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--chalk-dim);
+  text-align: right;
+}
+
+/* ---- Modal + OCR form for body composition import ---- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.modal-overlay .modal {
+  background: var(--bg-raised);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.modal-overlay .modal-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+  display:flex; justify-content: space-between; align-items:center;
+  font-weight: 600;
+  color: var(--chalk);
+}
+.modal-overlay .modal-close {
+  background: none; border: none;
+  color: var(--chalk-dim);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 8px;
+}
+.modal-overlay .modal-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+.modal-help {
+  font-size: 0.82rem;
+  color: var(--chalk-dim);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.file-picker-btn {
+  display: inline-block;
+  background: var(--rust);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.ocr-status {
+  padding: 8px 12px;
+  background: var(--bg-base);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: var(--chalk-dim);
+  margin-bottom: 12px;
+}
+.bc-edit-row {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 0.82rem;
+  color: var(--chalk-dim);
+}
+.bc-edit-row input {
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  padding: 6px 10px;
+  border-radius: 6px;
+  width: 130px;
+  font-size: 0.85rem;
+}
+.bc-edit-date-row {
+  display: flex; gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.primary-btn {
+  width: 100%;
+  background: var(--rust);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 14px;
+}

@@ -20,35 +20,73 @@ let currentFoodDate = todayISO();
 let activeAddMealType = "Breakfast";
 
 // ---------- MICRONUTRIENT REFERENCE (standard adult RDA) ----------
+// ---------- MICRONUTRIENT RDA (age & sex aware, per NIH ODS DRIs) ----------
+// Each entry declares its measurement unit and how to compute the daily
+// reference intake based on the user's age band and sex. Where age/sex has
+// no meaningful effect, the value is a single number.
+//
+// Age bands used: teen (14-18), adult (19-50), older (51-70), senior (71+).
+// A profile whose age is below 14 falls back to the adult column (RDA
+// personalisation is only accurate from adolescence onward).
 const MICRO_RDA = {
-  vitaminA:     { name: "Vitamin A",        unit: "mcg", rda: 900 },
-  vitaminC:     { name: "Vitamin C",        unit: "mg",  rda: 90 },
-  vitaminD:     { name: "Vitamin D",        unit: "mcg", rda: 20 },
-  vitaminE:     { name: "Vitamin E",        unit: "mg",  rda: 15 },
-  vitaminK:     { name: "Vitamin K",        unit: "mcg", rda: 120 },
-  thiamin:      { name: "Thiamin (B1)",     unit: "mg",  rda: 1.2 },
-  riboflavin:   { name: "Riboflavin (B2)",  unit: "mg",  rda: 1.3 },
-  niacin:       { name: "Niacin (B3)",      unit: "mg",  rda: 16 },
-  b6:           { name: "Vitamin B6",       unit: "mg",  rda: 1.7 },
-  folate:       { name: "Folate (B9)",      unit: "mcg", rda: 400 },
-  b12:          { name: "Vitamin B12",      unit: "mcg", rda: 2.4 },
-  pantothenic:  { name: "Pantothenic Acid (B5)", unit: "mg", rda: 5 },
-  biotin:       { name: "Biotin (B7)",      unit: "mcg", rda: 30 },
-  calcium:      { name: "Calcium",          unit: "mg",  rda: 1000 },
-  iron:         { name: "Iron",             unit: "mg",  rda: 18 }, // adjusted by gender below
-  magnesium:    { name: "Magnesium",        unit: "mg",  rda: 400 },
-  phosphorus:   { name: "Phosphorus",       unit: "mg",  rda: 700 },
-  potassium:    { name: "Potassium",        unit: "mg",  rda: 3400 },
-  sodium:       { name: "Sodium (limit)",   unit: "mg",  rda: 2300 },
-  zinc:         { name: "Zinc",             unit: "mg",  rda: 11 },
-  copper:       { name: "Copper",           unit: "mcg", rda: 900 },
-  manganese:    { name: "Manganese",        unit: "mg",  rda: 2.3 },
-  selenium:     { name: "Selenium",         unit: "mcg", rda: 55 },
+  // Fat-soluble vitamins
+  vitaminA:    { name: "Vitamin A",         unit: "mcg", byAgeSex: { teen:{m:900,f:700}, adult:{m:900,f:700}, older:{m:900,f:700}, senior:{m:900,f:700} } },
+  vitaminD:    { name: "Vitamin D",         unit: "mcg", byAgeSex: { teen:{m:15, f:15},  adult:{m:15, f:15},  older:{m:15, f:15},  senior:{m:20, f:20} } },
+  vitaminE:    { name: "Vitamin E",         unit: "mg",  byAgeSex: { teen:{m:15, f:15},  adult:{m:15, f:15},  older:{m:15, f:15},  senior:{m:15, f:15} } },
+  vitaminK:    { name: "Vitamin K",         unit: "mcg", byAgeSex: { teen:{m:75, f:75},  adult:{m:120,f:90},  older:{m:120,f:90},  senior:{m:120,f:90} } },
+  // Water-soluble vitamins
+  vitaminC:    { name: "Vitamin C",         unit: "mg",  byAgeSex: { teen:{m:75, f:65},  adult:{m:90, f:75},  older:{m:90, f:75},  senior:{m:90, f:75} } },
+  thiamin:     { name: "Thiamin (B1)",      unit: "mg",  byAgeSex: { teen:{m:1.2,f:1.0}, adult:{m:1.2,f:1.1}, older:{m:1.2,f:1.1}, senior:{m:1.2,f:1.1} } },
+  riboflavin:  { name: "Riboflavin (B2)",   unit: "mg",  byAgeSex: { teen:{m:1.3,f:1.0}, adult:{m:1.3,f:1.1}, older:{m:1.3,f:1.1}, senior:{m:1.3,f:1.1} } },
+  niacin:      { name: "Niacin (B3)",       unit: "mg",  byAgeSex: { teen:{m:16, f:14},  adult:{m:16, f:14},  older:{m:16, f:14},  senior:{m:16, f:14} } },
+  pantothenic: { name: "Pantothenic (B5)",  unit: "mg",  byAgeSex: { teen:{m:5,  f:5},   adult:{m:5,  f:5},   older:{m:5,  f:5},   senior:{m:5,  f:5} } },
+  vitaminB6:   { name: "Vitamin B6",        unit: "mg",  byAgeSex: { teen:{m:1.3,f:1.2}, adult:{m:1.3,f:1.3}, older:{m:1.7,f:1.5}, senior:{m:1.7,f:1.5} } },
+  biotin:      { name: "Biotin (B7)",       unit: "mcg", byAgeSex: { teen:{m:25, f:25},  adult:{m:30, f:30},  older:{m:30, f:30},  senior:{m:30, f:30} } },
+  folate:      { name: "Folate (B9)",       unit: "mcg", byAgeSex: { teen:{m:400,f:400}, adult:{m:400,f:400}, older:{m:400,f:400}, senior:{m:400,f:400} } },
+  vitaminB12:  { name: "Vitamin B12",       unit: "mcg", byAgeSex: { teen:{m:2.4,f:2.4}, adult:{m:2.4,f:2.4}, older:{m:2.4,f:2.4}, senior:{m:2.4,f:2.4} } },
+  choline:     { name: "Choline",           unit: "mg",  byAgeSex: { teen:{m:550,f:400}, adult:{m:550,f:425}, older:{m:550,f:425}, senior:{m:550,f:425} } },
+  // Macro minerals
+  calcium:     { name: "Calcium",           unit: "mg",  byAgeSex: { teen:{m:1300,f:1300}, adult:{m:1000,f:1000}, older:{m:1000,f:1200}, senior:{m:1200,f:1200} } },
+  phosphorus:  { name: "Phosphorus",        unit: "mg",  byAgeSex: { teen:{m:1250,f:1250}, adult:{m:700, f:700},  older:{m:700, f:700},  senior:{m:700, f:700} } },
+  magnesium:   { name: "Magnesium",         unit: "mg",  byAgeSex: { teen:{m:410, f:360},  adult:{m:400, f:310},  older:{m:420, f:320},  senior:{m:420, f:320} } },
+  potassium:   { name: "Potassium",         unit: "mg",  byAgeSex: { teen:{m:3000,f:2300}, adult:{m:3400,f:2600}, older:{m:3400,f:2600}, senior:{m:3400,f:2600} } },
+  sodium:      { name: "Sodium",            unit: "mg",  byAgeSex: { teen:{m:1500,f:1500}, adult:{m:1500,f:1500}, older:{m:1300,f:1300}, senior:{m:1200,f:1200} } },
+  // Trace minerals
+  iron:        { name: "Iron",              unit: "mg",  byAgeSex: { teen:{m:11, f:15},  adult:{m:8,  f:18},  older:{m:8,  f:8},   senior:{m:8,  f:8} } },
+  zinc:        { name: "Zinc",              unit: "mg",  byAgeSex: { teen:{m:11, f:9},   adult:{m:11, f:8},   older:{m:11, f:8},   senior:{m:11, f:8} } },
+  copper:      { name: "Copper",            unit: "mcg", byAgeSex: { teen:{m:890,f:890}, adult:{m:900,f:900}, older:{m:900,f:900}, senior:{m:900,f:900} } },
+  manganese:   { name: "Manganese",         unit: "mg",  byAgeSex: { teen:{m:2.2,f:1.6}, adult:{m:2.3,f:1.8}, older:{m:2.3,f:1.8}, senior:{m:2.3,f:1.8} } },
+  selenium:    { name: "Selenium",          unit: "mcg", byAgeSex: { teen:{m:55, f:55},  adult:{m:55, f:55},  older:{m:55, f:55},  senior:{m:55, f:55} } },
+  iodine:      { name: "Iodine",            unit: "mcg", byAgeSex: { teen:{m:150,f:150}, adult:{m:150,f:150}, older:{m:150,f:150}, senior:{m:150,f:150} } },
+  chromium:    { name: "Chromium",          unit: "mcg", byAgeSex: { teen:{m:35, f:24},  adult:{m:35, f:25},  older:{m:30, f:20},  senior:{m:30, f:20} } },
+  molybdenum:  { name: "Molybdenum",        unit: "mcg", byAgeSex: { teen:{m:43, f:43},  adult:{m:45, f:45},  older:{m:45, f:45},  senior:{m:45, f:45} } },
 };
 
-function micronutrientRDA(key, gender) {
-  if (key === "iron") return gender === "female" ? 18 : 8;
-  return MICRO_RDA[key].rda;
+function _ageBand(age) {
+  const a = Number(age) || 30;
+  if (a >= 71) return "senior";
+  if (a >= 51) return "older";
+  if (a >= 19) return "adult";
+  if (a >= 14) return "teen";
+  return "adult"; // <14 not personalised — safest fallback
+}
+
+// Returns the RDA/AI for a micronutrient, tailored to the profile. Accepts
+// either the whole food profile object (preferred) or a bare gender string
+// for backward compatibility with older callers.
+function micronutrientRDA(key, profileOrGender) {
+  const info = MICRO_RDA[key];
+  if (!info) return 0;
+  let gender = "male", age = 30;
+  if (typeof profileOrGender === "string") {
+    gender = profileOrGender;
+  } else if (profileOrGender && typeof profileOrGender === "object") {
+    gender = profileOrGender.gender || "male";
+    age = profileOrGender.age || 30;
+  }
+  const band = _ageBand(age);
+  const cell = info.byAgeSex[band];
+  return gender === "female" ? cell.f : cell.m;
 }
 
 // USDA nutrientName substring -> {key, unit conversion}
@@ -61,9 +99,9 @@ const USDA_NUTRIENT_MAP = [
   ["Thiamin", "thiamin", "mg"],
   ["Riboflavin", "riboflavin", "mg"],
   ["Niacin", "niacin", "mg"],
-  ["Vitamin B-6", "b6", "mg"],
+  ["Vitamin B-6", "vitaminB6", "mg"],
   ["Folate, total", "folate", "mcg"],
-  ["Vitamin B-12", "b12", "mcg"],
+  ["Vitamin B-12", "vitaminB12", "mcg"],
   ["Pantothenic acid", "pantothenic", "mg"],
   ["Biotin", "biotin", "mcg"],
   ["Calcium, Ca", "calcium", "mg"],
@@ -601,7 +639,7 @@ function renderFoodDaily() {
   document.getElementById("dailyWeightInput").value = weightEntry ? weightEntry.weightKg : "";
 
   renderMealSections(dayLogs);
-  renderMicroPanel(totals.micros, profile.gender);
+  renderMicroPanel(totals.micros, profile);
 }
 
 document.getElementById("dailyWeightSaveBtn").addEventListener("click", () => {
@@ -710,17 +748,19 @@ function renderMealSections(dayLogs) {
   });
 }
 
-function renderMicroPanel(consumedMicros, gender) {
+function renderMicroPanel(consumedMicros, profile) {
   const panel = document.getElementById("microPanel");
   panel.innerHTML = Object.entries(MICRO_RDA).map(([key, info]) => {
-    const rda = micronutrientRDA(key, gender);
+    const rda = micronutrientRDA(key, profile);
     const consumed = consumedMicros[key] || 0;
-    const pct = Math.min(100, Math.round((consumed / rda) * 100));
-    const color = pct >= 100 ? "#4ACF6B" : pct >= 50 ? "#FFC94A" : "#FF6B4A";
+    const pctRaw = rda > 0 ? (consumed / rda) * 100 : 0;
+    const pct = Math.min(100, Math.round(pctRaw));
+    const met = pctRaw >= 100;
+    const color = met ? "#4ACF6B" : pctRaw >= 50 ? "#FFC94A" : "#FF6B4A";
     return `
-      <div class="micro-row">
+      <div class="micro-row ${met ? 'micro-row-met' : ''}">
         <div class="micro-row-top">
-          <span class="micro-name">${info.name}</span>
+          <span class="micro-name">${met ? '✓ ' : ''}${info.name}</span>
           <span class="micro-amount">${consumed.toFixed(1)} / ${rda}${info.unit}</span>
         </div>
         <div class="micro-bar-track"><div class="micro-bar-fill" style="width:${pct}%; background:${color};"></div></div>

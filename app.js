@@ -757,15 +757,21 @@ function renderDayContent() {
     const titleRow = document.createElement("div");
     titleRow.className = "exercise-title-row";
     const muscleColor = (MUSCLE_INFO[effectiveMuscle] && MUSCLE_INFO[effectiveMuscle].color) || "#5C6670";
-    const viewLabel = (MUSCLE_INFO[effectiveMuscle] && MUSCLE_INFO[effectiveMuscle].view) === "back" ? "Back view" : "Front view";
+    const diagramViews = bodyDiagramFor(effectiveMuscle, effectiveSecondary);
+    const viewLabel = diagramViews.length === 2
+      ? "Front + back"
+      : diagramViews[0] && diagramViews[0].view === "back" ? "Back view" : "Front view";
+    const diagramInner = diagramViews
+      .map(v => `<div class="mm-view">${v.svg}</div>`)
+      .join("");
     const secondaryChips = effectiveSecondary.map(sm => {
       const c = (MUSCLE_INFO[sm] && MUSCLE_INFO[sm].light) || "#5C6670";
       return `<span class="secondary-chip" style="--chip-color:${c}">${sm}</span>`;
     }).join("");
 
     titleRow.innerHTML = `
-      <div class="exercise-diagram">
-        ${bodyDiagramFor(effectiveMuscle, effectiveSecondary)}
+      <div class="exercise-diagram ${diagramViews.length === 2 ? 'exercise-diagram-dual' : ''}">
+        ${diagramInner}
       </div>
       <div class="exercise-name-wrap">
         <span class="exercise-name">${effectiveName}${swappedName ? '<span class="swapped-tag">Swapped</span>' : ""}</span>
