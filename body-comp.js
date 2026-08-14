@@ -255,6 +255,17 @@ async function handleBodyCompScreenshotFile(file) {
     if (typeof syncWorkouts === "function") syncWorkouts("Update weight from scale screenshot");
     closeBodyCompModal();
     renderBodyCompPanel();
+    // Refresh comparison + chart if we're currently on the Body Stats tab
+    if (typeof renderBodyStatsComparison === "function") renderBodyStatsComparison();
+    const select = document.getElementById("bsMetricSelect");
+    if (select && typeof renderBodyStatsMetricChart === "function") {
+      renderBodyStatsMetricChart(select.value || "weightKg");
+    }
+    if (typeof renderWeightTrendChart === "function") renderWeightTrendChart();
+    // Kick off diet auto-adjustment based on the new snapshot
+    if (typeof runDietAdjustmentCheck === "function") {
+      runDietAdjustmentCheck({ trigger: "body_comp_import" });
+    }
   });
 }
 
@@ -272,12 +283,249 @@ function closeBodyCompModal() {
   if (overlay) overlay.style.display = "none";
 }
 
+// ---------- BASELINE (initial-vs-current comparison) ----------
+const BODY_COMP_BASELINE_KEY = "ironlog_body_comp_baseline_v1";
+
+function getBaselineEntryId() {
+  return localStorage.getItem(BODY_COMP_BASELINE_KEY);
+}
+function setBaselineEntryId(id) {
+  if (id) localStorage.setItem(BODY_COMP_BASELINE_KEY, id);
+  else localStorage.removeItem(BODY_COMP_BASELINE_KEY);
+}
+function baselineEntry() {
+  const id = getBaselineEntryId();
+  const entries = loadBodyComp();
+  if (id) {
+    const found = entries.find(e => e.id === id);
+    if (found) return found;
+  }
+  // Default: first entry chronologically
+  return entries[0] || null;
+}
+function resetBaselineToLatest() {
+  const entries = loadBodyComp();
+  if (entries.length === 0) return false;
+  const latest = entries[entries.length - 1];
+  setBaselineEntryId(latest.id);
+  return true;
+}
+
+// ---------- COMPARISON RENDER ----------
+function renderBodyStatsComparison() {
+  const container = document.getElementById("bsComparisonPanel");
+  if (!container) return;
+  const baseline = baselineEntry();
+  const entries = loadBodyComp();
+  const latest = entries[entries.length - 1];
+
+  if (!baseline || !latest) {
+    container.innerHTML = `<div class="body-comp-empty">
+      <div class="body-comp-empty-help">Import at least two scale screenshots to see baseline vs latest comparison.</div>
+    </div>`;
+    return;
+  }
+  if (baseline.id === latest.id) {
+    container.innerHTML = `<div class="body-comp-empty">
+      <div class="body-comp-empty-help">Only one snapshot on record. Import another to see progress vs baseline.</div>
+    </div>`;
+    return;
+  }
+
+  const rowsHtml = BODY_COMP_FIELDS
+    .filter(f => typeof baseline[f.key] === "number" || typeof latest[f.key] === "number")
+    .map(f => {
+      const bv = baseline[f.key], lv = latest[f.key];
+      const baseStr = typeof bv === "number" ? `${bv}${f.unit ? " " + f.unit : ""}` : "—";
+      const lateStr = typeof lv === "number" ? `${lv}${f.unit ? " " + f.unit : ""}` : "—";
+      let deltaStr = "—", deltaCls = "";
+      if (typeof bv === "number" && typeof lv === "number") {
+        const d = lv - bv;
+        const sign = d > 0 ? "+" : "";
+        deltaStr = `${sign}${d.toFixed(1)}${f.unit ? " " + f.unit : ""}`;
+        // Direction judged by metric semantics (some down = good)
+        const downIsGood = ["weightKg","bmi","bodyFatPct","fatMassKg","subcutaneousFatPct","visceralFat","bodyAge"].includes(f.key);
+        const upIsGood = ["muscleMassKg","muscleRatePct","skeletalMusclePct","boneMassKg","proteinMassKg","proteinPct","bodyWaterPct","waterWeightKg","bmr"].includes(f.key);
+        if (Math.abs(d) < 0.05) deltaCls = "bs-delta-flat";
+        else if ((d < 0 && downIsGood) || (d > 0 && upIsGood)) deltaCls = "bs-delta-good";
+        else if ((d > 0 && downIsGood) || (d < 0 && upIsGood)) deltaCls = "bs-delta-bad";
+      }
+      return `<div class="bs-cmp-row">
+        <span class="bs-cmp-label">${f.label}</span>
+        <span class="bs-cmp-base">${baseStr}</span>
+        <span class="bs-cmp-arrow">→</span>
+        <span class="bs-cmp-late">${lateStr}</span>
+        <span class="bs-cmp-delta ${deltaCls}">${deltaStr}</span>
+      </div>`;
+    }).join("");
+
+  container.innerHTML = `
+    <div class="bs-cmp-header">
+      <div class="bs-cmp-header-col">
+        <div class="bs-cmp-header-title">Baseline</div>
+        <div class="bs-cmp-header-date">${baseline.date}</div>
+      </div>
+      <div class="bs-cmp-header-col">
+        <div class="bs-cmp-header-title">Latest</div>
+        <div class="bs-cmp-header-date">${latest.date}</div>
+      </div>
+    </div>
+    <div class="bs-cmp-rows">${rowsHtml}</div>`;
+}
+
+// ---------- PER-METRIC TREND CHART ----------
+let __bsMetricChartInstance = null;
+
+// Per-metric Y-axis fallback ranges when no data has been logged yet.
+// [min, max] chosen so the placeholder chart still shows a meaningful scale
+// the user recognises for that metric on first glance.
+const BS_METRIC_DEFAULT_RANGE = {
+  weightKg:             [40, 120],
+  bmi:                  [15, 40],
+  bodyFatPct:           [5,  45],
+  fatMassKg:            [0,  50],
+  fatFreeBodyWeightKg:  [30, 100],
+  muscleMassKg:         [20, 90],
+  muscleRatePct:        [20, 70],
+  skeletalMusclePct:    [20, 70],
+  boneMassKg:           [1,  5],
+  proteinMassKg:        [5,  40],
+  proteinPct:           [10, 30],
+  waterWeightKg:        [20, 70],
+  bodyWaterPct:         [30, 70],
+  subcutaneousFatPct:   [5,  35],
+  visceralFat:          [1,  25],
+  bmr:                  [1000, 3000],
+  bodyAge:              [15, 80],
+  idealBodyWeightKg:    [40, 100],
+};
+
+function renderBodyStatsMetricChart(key) {
+  const canvas = document.getElementById("bsMetricChart");
+  const emptyNote = document.getElementById("bsMetricEmpty");
+  if (!canvas) return;
+  // Axes-with-labels rule: always render the chart. The optional empty note
+  // is only kept in the DOM as a legacy element — hide it permanently so it
+  // can never mask the axes.
+  if (emptyNote) emptyNote.style.display = "none";
+  canvas.style.display = "block";
+
+  const entries = (typeof loadBodyComp === "function") ? loadBodyComp() : [];
+  const withValue = entries
+    .filter(e => typeof e[key] === "number")
+    .sort((a, b) => (a.date + "T" + (a.time || "00:00")) < (b.date + "T" + (b.time || "00:00")) ? -1 : 1);
+
+  const field = BODY_COMP_FIELDS.find(f => f.key === key);
+  const yTitle = (field ? field.label : key) + (field && field.unit ? " (" + field.unit + ")" : "");
+
+  let labels, data, yMin, yMax;
+
+  if (withValue.length === 0) {
+    // Scaffold: last 7 dates on the X axis, no points, a real per-metric Y range.
+    const today = new Date();
+    labels = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().slice(5, 10);   // MM-DD
+    });
+    data = labels.map(() => null);
+    const range = BS_METRIC_DEFAULT_RANGE[key] || [0, 100];
+    yMin = range[0];
+    yMax = range[1];
+    // If we have a profile weight and the metric is weight-related, tighten the
+    // scaffold around the user's ballpark so the empty axis is personally accurate.
+    const profile = (typeof loadFoodProfile === "function") ? loadFoodProfile() : null;
+    if (profile && profile.weightKg) {
+      if (key === "weightKg") { yMin = Math.max(0, Math.floor((profile.weightKg - 15) / 5) * 5); yMax = Math.ceil((profile.weightKg + 15) / 5) * 5; }
+      if (key === "idealBodyWeightKg") { yMin = Math.max(0, Math.floor((profile.weightKg - 25) / 5) * 5); yMax = Math.ceil((profile.weightKg + 5) / 5) * 5; }
+    }
+  } else {
+    labels = withValue.map(e => e.date);
+    data = withValue.map(e => e[key]);
+    const min = Math.min(...data), max = Math.max(...data);
+    const pad = Math.max((max - min) * 0.15, 0.5);
+    yMin = min - pad;
+    yMax = max + pad;
+  }
+
+  if (__bsMetricChartInstance) __bsMetricChartInstance.destroy();
+  __bsMetricChartInstance = new Chart(canvas, {
+    type: "line",
+    data: { labels, datasets: [{
+      label: field ? field.label : key,
+      data,
+      borderColor: "#4A9EFF",
+      backgroundColor: "rgba(74,158,255,0.15)",
+      pointBackgroundColor: "#4A9EFF",
+      tension: 0.3, fill: true, spanGaps: true,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          min: yMin, max: yMax,
+          ticks: { color: "#8f8f8f" },
+          grid: { color: "rgba(255,255,255,0.05)" },
+          title: { display: true, text: yTitle, color: "#8f8f8f" },
+        },
+        x: {
+          ticks: { color: "#8f8f8f", maxRotation: 45 },
+          grid: { color: "rgba(255,255,255,0.05)" },
+          title: { display: true, text: "Date", color: "#8f8f8f" },
+        },
+      },
+    },
+  });
+}
+
+function populateMetricPicker() {
+  const select = document.getElementById("bsMetricSelect");
+  if (!select) return;
+  // Keep prior selection if any
+  const prior = select.value;
+  select.innerHTML = "";
+  BODY_COMP_FIELDS.forEach(f => {
+    const opt = document.createElement("option");
+    opt.value = f.key;
+    opt.textContent = f.label + (f.unit ? " (" + f.unit + ")" : "");
+    select.appendChild(opt);
+  });
+  if (prior && BODY_COMP_FIELDS.some(f => f.key === prior)) select.value = prior;
+  else select.value = "weightKg";
+}
+
+// ---------- WEIGHT INPUT ON BODY STATS TAB ----------
+function renderBodyStatsWeightInput() {
+  const input = document.getElementById("bsWeightInput");
+  if (!input) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayEntry = (typeof weightLogs !== "undefined") ? weightLogs.find(w => w.date === today) : null;
+  input.value = todayEntry ? todayEntry.weightKg : "";
+}
+
+// ---------- BODY STATS TAB ENTRY POINT ----------
+function renderBodyStatsTab() {
+  renderBodyCompPanel();
+  renderBodyStatsWeightInput();
+  renderBodyStatsComparison();
+  populateMetricPicker();
+  const select = document.getElementById("bsMetricSelect");
+  if (select) renderBodyStatsMetricChart(select.value || "weightKg");
+  // Also render the weight trend chart that we moved from Progress
+  if (typeof renderWeightTrendChart === "function") renderWeightTrendChart();
+}
+
 // Wire up buttons once the DOM is ready.
-function initBodyCompUI() {
+function initBodyStatsUI() {
   const openBtn = document.getElementById("bodyCompImportBtn");
   const overlay = document.getElementById("bodyCompModalOverlay");
   const closeBtn = document.getElementById("bcOcrCloseBtn");
   const fileInput = document.getElementById("bcOcrFileInput");
+  const weightSaveBtn = document.getElementById("bsWeightSaveBtn");
+  const weightInput = document.getElementById("bsWeightInput");
+  const resetBaselineBtn = document.getElementById("bsResetBaselineBtn");
+  const metricSelect = document.getElementById("bsMetricSelect");
 
   if (openBtn) openBtn.addEventListener("click", openBodyCompModal);
   if (closeBtn) closeBtn.addEventListener("click", closeBodyCompModal);
@@ -288,13 +536,47 @@ function initBodyCompUI() {
       if (file) handleBodyCompScreenshotFile(file);
     });
   }
+  if (weightSaveBtn && weightInput) {
+    weightSaveBtn.addEventListener("click", () => {
+      const val = parseFloat(weightInput.value);
+      if (!val) { if (typeof showToast === "function") showToast("Enter a weight"); return; }
+      const today = new Date().toISOString().slice(0, 10);
+      if (typeof weightLogs !== "undefined") {
+        weightLogs = weightLogs.filter(w => w.date !== today);
+        weightLogs.push({ date: today, weightKg: val });
+        if (typeof saveWeightLogs === "function") saveWeightLogs(weightLogs);
+      }
+      if (typeof showToast === "function") showToast("Weight logged");
+      if (typeof syncPush === "function") syncPush("Log daily weight");
+      // Refresh trend chart if we're on Body Stats tab
+      if (typeof renderWeightTrendChart === "function") renderWeightTrendChart();
+      // Trigger diet adjuster in case weight-only cadence has enough data
+      if (typeof runDietAdjustmentCheck === "function") runDietAdjustmentCheck({ trigger: "weight_log" });
+    });
+  }
+  if (resetBaselineBtn) {
+    resetBaselineBtn.addEventListener("click", () => {
+      if (resetBaselineToLatest()) {
+        if (typeof showToast === "function") showToast("Baseline reset to latest snapshot");
+        renderBodyStatsComparison();
+      } else {
+        if (typeof showToast === "function") showToast("No snapshots yet to use as baseline");
+      }
+    });
+  }
+  if (metricSelect) {
+    metricSelect.addEventListener("change", () => {
+      renderBodyStatsMetricChart(metricSelect.value);
+    });
+  }
+  // Initial render for anything that doesn't need the tab to be active
   renderBodyCompPanel();
 }
 
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initBodyCompUI);
+    document.addEventListener("DOMContentLoaded", initBodyStatsUI);
   } else {
-    initBodyCompUI();
+    initBodyStatsUI();
   }
 }

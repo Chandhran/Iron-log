@@ -200,6 +200,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.getElementById("view-" + btn.dataset.view).classList.add("active");
     if (btn.dataset.view === "home" && typeof renderHomeTab === "function") renderHomeTab();
     if (btn.dataset.view === "progress") renderProgressTab();
+    if (btn.dataset.view === "bodystats" && typeof renderBodyStatsTab === "function") renderBodyStatsTab();
     if (btn.dataset.view === "history") renderHistory();
     if (btn.dataset.view === "food" && typeof renderFoodTab === "function") renderFoodTab();
     if (btn.dataset.view === "train") {
@@ -999,7 +1000,6 @@ let weightChart, volumeChart, weightTrendChart, muscleBarChart;
 
 function renderProgressTab() {
   renderDashboard("dashboard-progress");
-  renderWeightTrendChart();
   renderMuscleBarChart();
 
   const select = document.getElementById("exerciseSelect");

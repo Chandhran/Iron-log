@@ -41,6 +41,7 @@
       <button class="tab-btn active" data-view="home">Home</button>
       <button class="tab-btn" data-view="train">Train</button>
       <button class="tab-btn" data-view="progress">Progress</button>
+      <button class="tab-btn" data-view="bodystats">Body Stats</button>
       <button class="tab-btn" data-view="food">Food</button>
       <button class="tab-btn" data-view="history">History</button>
     </nav>
@@ -58,18 +59,6 @@
 
   <main id="view-progress" class="view">
     <div class="dashboard" id="dashboard-progress"></div>
-
-    <div class="section-label section-with-action">
-      <span>Body composition</span>
-      <button id="bodyCompImportBtn" class="section-action-btn">Import from scale screenshot</button>
-    </div>
-    <div class="panel" id="bodyCompPanel"></div>
-
-    <div class="section-label">Weight trend</div>
-    <div class="panel chart-panel">
-      <canvas id="weightTrendChart" height="180"></canvas>
-      <div id="weightTrendEmpty" class="chart-empty-note" style="display:none;">Log your weight in the Food tab to see this graph.</div>
-    </div>
 
     <div class="section-label">Sets per muscle group — this week vs last</div>
     <div class="panel chart-panel">
@@ -90,6 +79,45 @@
       <canvas id="volumeChart" height="180"></canvas>
     </div>
     <div class="panel" id="prBox"></div>
+  </main>
+
+  <main id="view-bodystats" class="view">
+    <div class="section-label section-with-action">
+      <span>Body composition</span>
+      <button id="bodyCompImportBtn" class="section-action-btn">Import from scale screenshot</button>
+    </div>
+    <div class="panel" id="bodyCompPanel"></div>
+
+    <div class="section-label">Today's weight</div>
+    <div class="panel weight-entry-panel">
+      <div class="weight-entry-row">
+        <input type="number" id="bsWeightInput" step="0.1" placeholder="e.g. 77.4">
+        <button class="save-btn weight-save-btn" id="bsWeightSaveBtn">Log</button>
+      </div>
+      <div class="bs-hint">Screenshot imports also update this automatically.</div>
+    </div>
+
+    <div class="section-label">Weight trend</div>
+    <div class="panel chart-panel">
+      <canvas id="weightTrendChart" height="180"></canvas>
+      <div id="weightTrendEmpty" class="chart-empty-note" style="display:none;">Log your weight or import a scale screenshot to see this graph.</div>
+    </div>
+
+    <div class="section-label section-with-action">
+      <span>Baseline vs latest</span>
+      <button id="bsResetBaselineBtn" class="section-action-btn section-action-btn-alt">Reset baseline to latest</button>
+    </div>
+    <div class="panel" id="bsComparisonPanel"></div>
+
+    <div class="section-label">Trend charts</div>
+    <div class="panel bs-metric-picker-panel">
+      <label class="field-label" for="bsMetricSelect">Metric</label>
+      <select id="bsMetricSelect"></select>
+    </div>
+    <div class="panel chart-panel">
+      <canvas id="bsMetricChart" height="200"></canvas>
+      <div id="bsMetricEmpty" class="chart-empty-note" style="display:none;">Import at least one scale screenshot to see trend charts.</div>
+    </div>
   </main>
 
   <main id="view-food" class="view">
@@ -223,6 +251,7 @@
           <div class="calorie-left-num" id="calorieLeftNum">0</div>
           <div class="calorie-left-label">kcal left</div>
         </div>
+        <div class="auto-adjust-chip" id="autoAdjustChip" style="display:none;"></div>
       </div>
 
       <div class="bento-row" style="margin-bottom:12px;">
@@ -253,14 +282,6 @@
           <canvas id="fatRing" width="70" height="70"></canvas>
           <div class="macro-ring-label">Fat</div>
           <div class="macro-ring-value" id="fatRingValue">0/0g</div>
-        </div>
-      </div>
-
-      <div class="panel weight-entry-panel">
-        <label class="field-label" for="dailyWeightInput">Today's weight (kg)</label>
-        <div class="weight-entry-row">
-          <input type="number" id="dailyWeightInput" step="0.1" placeholder="e.g. 77.4">
-          <button class="save-btn weight-save-btn" id="dailyWeightSaveBtn">Log</button>
         </div>
       </div>
 
@@ -425,6 +446,7 @@
 <script src="app.js"></script>
 <script src="diet-styles.js"></script>
 <script src="food.js"></script>
+<script src="diet-adjuster.js"></script>
 <script src="body-comp.js"></script>
 </body>
 </html>

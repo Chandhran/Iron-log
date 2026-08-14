@@ -1310,14 +1310,18 @@ select{
   text-align: right;
 }
 
-/* ---- Modal + OCR form for body composition import ---- */
-.modal-overlay {
+/* ---- Modal + OCR form for body composition import (scoped to its own id
+   to avoid clashing with the shared .modal-overlay class used by Sync
+   and Add Food modals) ---- */
+#bodyCompModalOverlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.7);
-  z-index: 100;
-  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 300;
+  display: none; align-items: flex-end; justify-content: center;
 }
-.modal-overlay .modal {
+#bodyCompModalOverlay.open,
+#bodyCompModalOverlay[style*="display: flex"] { display: flex; }
+#bodyCompModalOverlay .modal {
   background: var(--bg-raised);
   border-radius: 16px 16px 0 0;
   width: 100%;
@@ -1326,21 +1330,21 @@ select{
   display: flex;
   flex-direction: column;
 }
-.modal-overlay .modal-header {
+#bodyCompModalOverlay .modal-header {
   padding: 16px;
   border-bottom: 1px solid var(--line);
   display:flex; justify-content: space-between; align-items:center;
   font-weight: 600;
   color: var(--chalk);
 }
-.modal-overlay .modal-close {
+#bodyCompModalOverlay .modal-close {
   background: none; border: none;
   color: var(--chalk-dim);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 0 8px;
 }
-.modal-overlay .modal-body {
+#bodyCompModalOverlay .modal-body {
   padding: 16px;
   overflow-y: auto;
 }
@@ -1403,3 +1407,97 @@ select{
   cursor: pointer;
   margin-top: 14px;
 }
+
+/* ---- Body Stats tab ---- */
+.section-action-btn-alt {
+  background: transparent;
+  border: 1px solid var(--rust);
+  color: var(--rust);
+}
+.bs-hint {
+  font-size: 0.72rem;
+  color: var(--chalk-dim);
+  margin-top: 6px;
+}
+
+/* Baseline vs latest comparison */
+.bs-cmp-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+.bs-cmp-header-col {
+  text-align: center;
+}
+.bs-cmp-header-title {
+  font-size: 0.72rem;
+  color: var(--chalk-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.bs-cmp-header-date {
+  font-size: 0.85rem;
+  color: var(--chalk);
+  font-weight: 600;
+  margin-top: 2px;
+}
+.bs-cmp-rows { padding: 0 12px 12px; }
+.bs-cmp-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr auto 1fr 0.9fr;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+  align-items: center;
+}
+.bs-cmp-row:last-child { border-bottom: none; }
+.bs-cmp-label { color: var(--chalk-dim); }
+.bs-cmp-base,
+.bs-cmp-late { color: var(--chalk); text-align: center; }
+.bs-cmp-arrow { color: var(--chalk-dim); text-align: center; }
+.bs-cmp-delta {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.bs-delta-good { color: #4ACF6B; }
+.bs-delta-bad  { color: #FF6B4A; }
+.bs-delta-flat { color: var(--chalk-dim); }
+
+/* Metric picker + chart */
+.bs-metric-picker-panel {
+  padding: 12px;
+}
+#bsMetricSelect {
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  color: var(--chalk);
+  padding: 8px 10px;
+  border-radius: 6px;
+  width: 100%;
+  font-size: 0.88rem;
+}
+#bsMetricChart, #weightTrendChart {
+  max-height: 240px;
+}
+
+/* Auto-adjust chip on Food calorie card */
+.food-calorie-card { position: relative; }
+.auto-adjust-chip {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(74, 158, 255, 0.15);
+  border: 1px solid rgba(74, 158, 255, 0.5);
+  color: #4A9EFF;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.auto-adjust-chip:active { transform: translateX(-50%) scale(0.97); }

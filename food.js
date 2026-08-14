@@ -546,6 +546,9 @@ document.getElementById("foodNextDay").addEventListener("click", () => {
 function logsForDate(date) { return foodLogs.filter(l => l.date === date); }
 
 // Compute today's effective calorie + macro targets given the selected diet style.
+// Automatic auto-adjuster deltas (from body-comp trend + food-log compliance)
+// are added on top of the profile's baseline values so the surfaced targets
+// silently reflect the tuning.
 function todaysGoals(profile) {
   const style = DIET_STYLES[profile.dietStyle] || DIET_STYLES.balanced;
   let goalCalories = profile.goalCalories;
@@ -589,7 +592,21 @@ function todaysGoals(profile) {
     goalProtein = null; goalCarb = null; goalFat = null;
   }
 
-  return { goalCalories, goalProtein, goalCarb, goalFat, statusHtml };
+  // Apply diet-adjuster cumulative deltas on top of baseline. Skip protocols
+  // whose calories are computed dynamically and don't have a static target
+  // (hyperbolic fasting/diet null out goalCalories on purpose).
+  let adjustmentDelta = { calorieDelta: 0, proteinDelta: 0, count: 0 };
+  if (typeof cumulativeDietDeltas === "function") {
+    adjustmentDelta = cumulativeDietDeltas();
+    if (typeof goalCalories === "number") {
+      goalCalories = Math.max(1000, goalCalories + adjustmentDelta.calorieDelta);
+    }
+    if (typeof goalProtein === "number") {
+      goalProtein = Math.max(30, goalProtein + adjustmentDelta.proteinDelta);
+    }
+  }
+
+  return { goalCalories, goalProtein, goalCarb, goalFat, statusHtml, adjustmentDelta };
 }
 
 function renderFoodDaily() {
@@ -609,6 +626,28 @@ function renderFoodDaily() {
 
   const goals = todaysGoals(profile);
   document.getElementById("dietStatusPanel").innerHTML = goals.statusHtml;
+
+  // Silent auto-adjustment chip
+  const chip = document.getElementById("autoAdjustChip");
+  if (chip) {
+    const d = goals.adjustmentDelta || { calorieDelta: 0, proteinDelta: 0, count: 0 };
+    if ((d.calorieDelta || d.proteinDelta) && d.count > 0) {
+      const parts = [];
+      if (d.calorieDelta) parts.push((d.calorieDelta > 0 ? "+" : "") + d.calorieDelta + " kcal");
+      if (d.proteinDelta) parts.push((d.proteinDelta > 0 ? "+" : "") + d.proteinDelta + "g P");
+      chip.textContent = "Auto: " + parts.join(" · ");
+      chip.style.display = "inline-block";
+      chip.onclick = () => {
+        if (typeof loadDietAdjustments !== "function") return;
+        const list = loadDietAdjustments();
+        if (list.length === 0) return;
+        const last = list[list.length - 1];
+        if (typeof showToast === "function") showToast(last.reason || "Auto adjustment applied");
+      };
+    } else {
+      chip.style.display = "none";
+    }
+  }
 
   drawCalorieDial(totals.calories, goals.goalCalories || profile.maintenanceCalories || 2000);
 
@@ -635,23 +674,9 @@ function renderFoodDaily() {
     document.getElementById("fatRingValue").textContent = `${Math.round(totals.fat)}g logged`;
   }
 
-  const weightEntry = weightLogs.find(w => w.date === currentFoodDate);
-  document.getElementById("dailyWeightInput").value = weightEntry ? weightEntry.weightKg : "";
-
   renderMealSections(dayLogs);
   renderMicroPanel(totals.micros, profile);
 }
-
-document.getElementById("dailyWeightSaveBtn").addEventListener("click", () => {
-  const val = parseFloat(document.getElementById("dailyWeightInput").value);
-  if (!val) { showToast("Enter a weight"); return; }
-  weightLogs = weightLogs.filter(w => w.date !== currentFoodDate);
-  weightLogs.push({ date: currentFoodDate, weightKg: val });
-  saveWeightLogs(weightLogs);
-  showToast("Weight logged");
-  syncPush("Log daily weight");
-  if (document.getElementById("view-progress").classList.contains("active")) renderWeightTrendChart();
-});
 
 function drawCalorieDial(consumed, goal) {
   const canvas = document.getElementById("calorieDial");
