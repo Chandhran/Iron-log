@@ -198,17 +198,22 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.classList.add("active");
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     document.getElementById("view-" + btn.dataset.view).classList.add("active");
-    if (btn.dataset.view === "home" && typeof renderHomeTab === "function") renderHomeTab();
-    if (btn.dataset.view === "progress") renderProgressTab();
-    if (btn.dataset.view === "bodystats" && typeof renderBodyStatsTab === "function") renderBodyStatsTab();
-    if (btn.dataset.view === "history") renderHistory();
-    if (btn.dataset.view === "food" && typeof renderFoodTab === "function") renderFoodTab();
-    if (btn.dataset.view === "train") {
-      renderRail();
-      renderPhaseLabel();
-      renderDayStrip();
-      renderDayContent();
-    }
+    // Defer to next frame: after the browser has laid out the newly-visible
+    // view. Chart.js reads canvas dimensions synchronously and gets 0 if the
+    // canvas is still inside a display:none container at draw time.
+    requestAnimationFrame(() => {
+      if (btn.dataset.view === "home" && typeof renderHomeTab === "function") renderHomeTab();
+      if (btn.dataset.view === "progress") renderProgressTab();
+      if (btn.dataset.view === "bodystats" && typeof renderBodyStatsTab === "function") renderBodyStatsTab();
+      if (btn.dataset.view === "history") renderHistory();
+      if (btn.dataset.view === "food" && typeof renderFoodTab === "function") renderFoodTab();
+      if (btn.dataset.view === "train") {
+        renderRail();
+        renderPhaseLabel();
+        renderDayStrip();
+        renderDayContent();
+      }
+    });
   });
 });
 
@@ -1004,16 +1009,27 @@ function renderProgressTab() {
 
   const select = document.getElementById("exerciseSelect");
   if (!select.dataset.filled) {
-    allExerciseNames().forEach(name => {
+    const names = allExerciseNames();
+    if (names.length === 0) {
       const opt = document.createElement("option");
-      opt.value = name; opt.textContent = name;
+      opt.value = "";
+      opt.textContent = "No exercises yet — generate a program from Home";
+      opt.disabled = true;
+      opt.selected = true;
       select.appendChild(opt);
-    });
+    } else {
+      names.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = name;
+        select.appendChild(opt);
+      });
+    }
     select.dataset.filled = "1";
     select.addEventListener("change", () => drawExerciseCharts(select.value));
   }
   if (select.value) drawExerciseCharts(select.value);
-  else if (select.options.length) drawExerciseCharts(select.options[0].value);
+  else if (select.options.length && select.options[0].value) drawExerciseCharts(select.options[0].value);
+  else drawExerciseCharts(null);
 }
 
 function chartCommonOpts(yLabel, xLabel, yMax) {
@@ -1110,13 +1126,15 @@ function renderMuscleBarChart() {
 
 function drawExerciseCharts(exerciseName) {
   const points = [];
-  sessions.filter(s => !s.rest).sort((a, b) => (a.id > b.id ? 1 : -1)).forEach(s => {
-    const ex = s.exercises.find(e => e.name === exerciseName);
-    if (!ex) return;
-    const weights = ex.sets.map(x => x.weight).filter(w => w != null);
-    const volume = ex.sets.reduce((sum, x) => sum + ((x.weight || 0) * (x.reps || 0)), 0);
-    points.push({ date: s.date, week: s.week, topWeight: weights.length ? Math.max(...weights) : null, volume });
-  });
+  if (exerciseName) {
+    sessions.filter(s => !s.rest).sort((a, b) => (a.id > b.id ? 1 : -1)).forEach(s => {
+      const ex = s.exercises.find(e => e.name === exerciseName);
+      if (!ex) return;
+      const weights = ex.sets.map(x => x.weight).filter(w => w != null);
+      const volume = ex.sets.reduce((sum, x) => sum + ((x.weight || 0) * (x.reps || 0)), 0);
+      points.push({ date: s.date, week: s.week, topWeight: weights.length ? Math.max(...weights) : null, volume });
+    });
+  }
 
   let labels, weightData, volumeData, weightMax, volumeMax;
   if (points.length === 0) {

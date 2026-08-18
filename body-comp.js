@@ -460,7 +460,7 @@ function renderBodyStatsMetricChart(key) {
       tension: 0.3, fill: true, spanGaps: true,
     }]},
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
       plugins: { legend: { display: false } },
       scales: {
         y: {
