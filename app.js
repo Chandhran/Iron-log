@@ -224,9 +224,11 @@ const EXERCISE_PATTERN = {};
 const EXERCISE_COMPOUND = {};
 const EXERCISE_TARGET = {}; // default target string, used when swapping in an alternative
 
-Object.values(PROGRAM).forEach(phase => {
+Object.keys(PROGRAM).filter(k => !k.startsWith("_")).forEach(key => {
+  const phase = PROGRAM[key];
+  if (!phase || !phase.days) return;
   phase.days.forEach(day => {
-    if (day.type === "training") {
+    if (day.type === "training" && day.exercises) {
       day.exercises.forEach(ex => {
         EXERCISE_MUSCLE[ex.name] = ex.muscle;
         EXERCISE_SECONDARY[ex.name] = ex.secondary || [];
@@ -339,13 +341,42 @@ function computeStreak() {
   return streak;
 }
 
-function computeHeatmap(monthsBack = 3) {
+function computeHeatmap(monthsBack) {
   const loggedDates = new Set(sessions.map(s => s.date));
   const now = new Date();
+
+  // Auto-grow mode: start from earliest of first logged session or program
+  // creation date; falls back to 3 months back if neither exists.
+  if (monthsBack == null) {
+    let earliest = null;
+    if (sessions.length > 0) {
+      const dates = sessions.map(s => s.date).filter(Boolean).sort();
+      if (dates[0]) earliest = parseISO(dates[0]);
+    }
+    try {
+      const cfg = (typeof loadConfig === "function") ? loadConfig() : null;
+      if (cfg && cfg.created_at) {
+        const c = new Date(cfg.created_at);
+        if (!earliest || c < earliest) earliest = c;
+      }
+    } catch (e) {}
+    if (!earliest) {
+      monthsBack = 3;
+    } else {
+      monthsBack = (now.getFullYear() - earliest.getFullYear()) * 12
+                 + (now.getMonth() - earliest.getMonth()) + 1;
+      if (monthsBack < 1) monthsBack = 1;
+    }
+  }
+
   const months = [];
   for (let i = monthsBack - 1; i >= 0; i--) {
     const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const label = monthDate.toLocaleDateString(undefined, { month: "short" });
+    // Include the year in labels once we go back past 12 months so Jan 2025
+    // and Jan 2026 don't both just say "Jan".
+    const label = monthsBack > 12
+      ? monthDate.toLocaleDateString(undefined, { month: "short", year: "2-digit" })
+      : monthDate.toLocaleDateString(undefined, { month: "short" });
     const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
     const isCurrentMonth = (i === 0);
     const lastDay = isCurrentMonth ? now.getDate() : daysInMonth;
@@ -372,7 +403,7 @@ function renderDashboard(targetId) {
   const thisWeek = computeWeekStats(monday);
   const lastWeek = computeWeekStats(prevMonday);
   const streak = computeStreak();
-  const heatmap = computeHeatmap(3);
+  const heatmap = computeHeatmap();
   if (!trainedAreasWeekMode[targetId]) trainedAreasWeekMode[targetId] = "this";
 
   const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
@@ -1052,8 +1083,16 @@ function renderDayContent() {
 // ---------- PROGRESS TAB ----------
 function allExerciseNames() {
   const names = new Set();
-  Object.values(PROGRAM).forEach(phase => {
-    phase.days.forEach(day => { if (day.type === "training") day.exercises.forEach(ex => names.add(ex.name)); });
+  if (typeof PROGRAM === "undefined" || !PROGRAM) return [];
+  // Skip meta fields on generated programs (_title, _id, _duration_weeks, etc.)
+  Object.keys(PROGRAM).filter(k => !k.startsWith("_")).forEach(key => {
+    const phase = PROGRAM[key];
+    if (!phase || !phase.days) return;
+    phase.days.forEach(day => {
+      if (day.type === "training" && day.exercises) {
+        day.exercises.forEach(ex => names.add(ex.name));
+      }
+    });
   });
   return Array.from(names).sort();
 }
