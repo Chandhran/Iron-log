@@ -365,7 +365,7 @@ function computeHeatmap(monthsBack) {
     } else {
       monthsBack = (now.getFullYear() - earliest.getFullYear()) * 12
                  + (now.getMonth() - earliest.getMonth()) + 1;
-      if (monthsBack < 1) monthsBack = 1;
+      if (monthsBack < 3) monthsBack = 3;
     }
   }
 
@@ -1100,8 +1100,8 @@ function allExerciseNames() {
 let weightChart, volumeChart, weightTrendChart, muscleBarChart;
 
 function renderProgressTab() {
-  renderDashboard("dashboard-progress");
-  renderMuscleBarChart();
+  try { renderDashboard("dashboard-progress"); } catch (e) { console.warn("dashboard render failed", e); }
+  try { renderMuscleBarChart(); } catch (e) { console.warn("muscle bar chart failed", e); }
 
   const select = document.getElementById("exerciseSelect");
   if (!select.dataset.filled) {
@@ -1152,6 +1152,7 @@ function chartCommonOpts(yLabel, xLabel, yMax) {
 
 function renderWeightTrendChart() {
   const canvas = document.getElementById("weightTrendChart");
+  if (typeof Chart === "undefined") return;
   const emptyNote = document.getElementById("weightTrendEmpty");
   if (emptyNote) emptyNote.style.display = "none";
   canvas.style.display = "block";
@@ -1184,6 +1185,12 @@ function renderWeightTrendChart() {
 
 function renderMuscleBarChart() {
   const canvas = document.getElementById("muscleBarChart");
+  if (typeof Chart === "undefined") {
+    if (canvas && canvas.parentElement) {
+      canvas.parentElement.innerHTML = '<div style="color:var(--chalk-dim);font-size:0.85rem;padding:12px;text-align:center;">Chart library blocked — disable your ad-blocker for this page and reload.</div>';
+    }
+    return;
+  }
   const monday = getMonday(new Date());
   const prevMonday = addDays(monday, -7);
   const thisWeek = computeWeekStats(monday);
@@ -1221,6 +1228,7 @@ function renderMuscleBarChart() {
 }
 
 function drawExerciseCharts(exerciseName) {
+  if (typeof Chart === "undefined") return;
   const points = [];
   if (exerciseName) {
     sessions.filter(s => !s.rest).sort((a, b) => (a.id > b.id ? 1 : -1)).forEach(s => {

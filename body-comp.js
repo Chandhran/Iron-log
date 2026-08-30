@@ -404,6 +404,7 @@ function renderBodyStatsMetricChart(key) {
   const canvas = document.getElementById("bsMetricChart");
   const emptyNote = document.getElementById("bsMetricEmpty");
   if (!canvas) return;
+  if (typeof Chart === "undefined") return;
   // Axes-with-labels rule: always render the chart. The optional empty note
   // is only kept in the DOM as a legacy element — hide it permanently so it
   // can never mask the axes.
