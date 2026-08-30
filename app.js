@@ -655,17 +655,57 @@ function renderDayContent() {
     let currentSession = existing;
     const box = document.createElement("div");
     box.className = "exercise-card";
-    day.tasks.forEach((t, i) => {
+
+    // Rehab-routine rotation across weeks (fix for issue #2).
+    // Combined pool = solo + non-solo. One pick per (week, rest-day) slot,
+    // cycling through the pool so every selected issue eventually surfaces.
+    //   solo pick    -> REPLACES the day's other tasks with only that routine
+    //   non-solo pick -> APPENDS the routine as an extra task
+    let renderTasks = day.tasks.slice();
+    const soloPool = day._rehab_solo_pool || [];
+    const nonSoloPool = day._rehab_nonsolo_pool || [];
+    const combined = soloPool.concat(nonSoloPool);
+    const weekIdx = Math.max(0, (state.week || 1) - 1);
+    const phaseObj = PROGRAM[getPhaseForWeek(state.week)];
+    const restDayNames = (phaseObj && phaseObj.days) ? phaseObj.days.filter(d => d.type === "rest").map(d => d.name) : [day.name];
+    const thisRestIdx = Math.max(0, restDayNames.indexOf(day.name));
+    const restsPerWeek = Math.max(1, restDayNames.length);
+
+    if (combined.length > 0) {
+      const globalSlot = weekIdx * restsPerWeek + thisRestIdx;
+      const pickedId = combined[globalSlot % combined.length];
+      const picked = (typeof getRehabRoutine === "function") ? getRehabRoutine(pickedId) : null;
+      if (picked) {
+        if (picked.isSolo) {
+          renderTasks = [{
+            task: picked.label,
+            notes: "Solo rehab routine · replaces other work today",
+            videoUrl: picked.videoUrl,
+          }];
+        } else {
+          renderTasks = renderTasks.concat([{
+            task: picked.label,
+            notes: "Targeted routine · watch and follow along",
+            videoUrl: picked.videoUrl,
+          }]);
+        }
+      }
+    }
+
+    renderTasks.forEach((t, i) => {
       const row = document.createElement("label");
       row.className = "task-row task-row-check";
       const checked = currentSession?.tasksDone?.[i] ? "checked" : "";
       const hasMoves = t.mobility_moves && t.mobility_moves.length > 0;
+      const videoBtn = t.videoUrl
+        ? `<a class="rehab-video-btn" href="${t.videoUrl}" target="_blank" rel="noopener">▶ Watch routine</a>`
+        : "";
       row.innerHTML = `
         <span class="task-check-left">
           <input type="checkbox" data-task="${i}" ${checked}>
           <span>${t.task}</span>
         </span>
-        <span class="task-note">${t.notes || ""}</span>`;
+        <span class="task-note">${t.notes || ""}${videoBtn}</span>`;
       box.appendChild(row);
 
       if (hasMoves) {
@@ -762,7 +802,10 @@ function renderDayContent() {
 
     const titleRow = document.createElement("div");
     titleRow.className = "exercise-title-row";
-    const muscleColor = (MUSCLE_INFO[effectiveMuscle] && MUSCLE_INFO[effectiveMuscle].color) || "#5C6670";
+    // Fix 3 (option B): chip colors match the diagram's universal red/amber
+    // (primary vs secondary) instead of per-muscle color from MUSCLE_INFO.
+    const muscleColor = "#e74c3c";
+    const secondaryColor = "#f39c12";
     const diagramViews = bodyDiagramFor(effectiveMuscle, effectiveSecondary);
     const viewLabel = diagramViews.length === 2
       ? "Front + back"
@@ -771,9 +814,22 @@ function renderDayContent() {
       .map(v => `<div class="mm-view">${v.svg}</div>`)
       .join("");
     const secondaryChips = effectiveSecondary.map(sm => {
-      const c = (MUSCLE_INFO[sm] && MUSCLE_INFO[sm].light) || "#5C6670";
-      return `<span class="secondary-chip" style="--chip-color:${c}">${sm}</span>`;
+      return `<span class="secondary-chip" style="--chip-color:${secondaryColor}">${sm}</span>`;
     }).join("");
+
+    // Exercise-tied rehab routine (fix issue #2 — only shown if user picked
+    // that specific issue during intake).
+    let rehabTiedHtml = "";
+    try {
+      const cfg2 = (typeof loadConfig === "function") ? loadConfig() : null;
+      const picks = (cfg2 && cfg2.intake_answers && cfg2.intake_answers.specific_issues) || [];
+      const tied = (typeof getRehabRoutineForExercise === "function")
+        ? getRehabRoutineForExercise(effectiveName, picks)
+        : null;
+      if (tied) {
+        rehabTiedHtml = `<a class="rehab-video-btn rehab-video-btn-inline" href="${tied.videoUrl}" target="_blank" rel="noopener" title="${tied.label}">▶ Watch fix: ${tied.label}</a>`;
+      }
+    } catch (e) {}
 
     titleRow.innerHTML = `
       <div class="exercise-diagram ${diagramViews.length === 2 ? 'exercise-diagram-dual' : ''}">
@@ -784,6 +840,7 @@ function renderDayContent() {
         <span class="muscle-chip glow" style="--chip-color:${muscleColor}; color:${muscleColor};">${effectiveMuscle}</span>
         ${secondaryChips ? `<div class="secondary-chip-row">${secondaryChips}</div>` : ""}
         <span class="view-label">${viewLabel}</span>
+        ${rehabTiedHtml}
       </div>
       <span class="exercise-target">${ex.target}</span>`;
     card.appendChild(titleRow);
@@ -1399,9 +1456,22 @@ function rebuildExerciseLookups() {
 rebuildExerciseLookups();
 
 setTimeout(() => {
-  if (typeof loadFoodProfile === "function") {
+  // Fix 1: prefer the sex answer from intake (captured on program creation);
+  // fall back to the food-profile gender. Both normalize to lowercase.
+  let genderResolved = null;
+  try {
+    if (typeof loadConfig === "function") {
+      const cfg = loadConfig();
+      const s = cfg && cfg.intake_answers && cfg.intake_answers.sex;
+      if (s) genderResolved = String(s).toLowerCase();
+    }
+  } catch (e) {}
+  if (!genderResolved && typeof loadFoodProfile === "function") {
     const fp = loadFoodProfile();
-    if (fp?.gender) { setBodyDiagramGender(fp.gender); }
+    if (fp?.gender) genderResolved = String(fp.gender).toLowerCase();
+  }
+  if (genderResolved && typeof setBodyDiagramGender === "function") {
+    setBodyDiagramGender(genderResolved);
   }
   if (typeof renderHomeTab === "function") renderHomeTab();
 }, 0);

@@ -224,6 +224,50 @@ function generateProgramFromIntake(a) {
   return program;
 }
 
+// Auto-derive extra mobility regions from injury_history (fix 2b).
+function derivedRegionsFromInjuries(a) {
+  const injuries = a.injury_history || [];
+  const extra = [];
+  if (typeof INJURY_TO_REGION === "undefined") return extra;
+  injuries.forEach(inj => {
+    const reg = INJURY_TO_REGION[inj];
+    if (reg && extra.indexOf(reg) === -1) extra.push(reg);
+  });
+  return extra;
+}
+
+// Auto-derive rehab routine ids from injury_history (fix 2b).
+function derivedRoutinesFromInjuries(a) {
+  const injuries = a.injury_history || [];
+  const extra = [];
+  if (typeof INJURY_TO_ROUTINES === "undefined") return extra;
+  injuries.forEach(inj => {
+    const list = INJURY_TO_ROUTINES[inj] || [];
+    list.forEach(id => { if (extra.indexOf(id) === -1) extra.push(id); });
+  });
+  return extra;
+}
+
+// Merge user-selected + injury-derived rehab routine ids.
+function allSelectedRoutineIds(a) {
+  const picked = (a.specific_issues || []).slice();
+  const derived = derivedRoutinesFromInjuries(a);
+  derived.forEach(id => { if (picked.indexOf(id) === -1) picked.push(id); });
+  return picked;
+}
+
+// Split routine ids into solo vs non-solo pools.
+function splitRoutinePools(ids) {
+  const solo = [], nonSolo = [];
+  if (typeof getRehabRoutine !== "function") return { solo, nonSolo };
+  ids.forEach(id => {
+    const r = getRehabRoutine(id);
+    if (!r) return;
+    (r.isSolo ? solo : nonSolo).push(id);
+  });
+  return { solo, nonSolo };
+}
+
 // ---------- REST DAY ----------
 function buildRestDay(dayName, a) {
   const items = a.active_recovery_items || [];
@@ -248,26 +292,43 @@ function buildRestDay(dayName, a) {
     tasks.push({ task:"Rest", notes:"Physical rest — no scheduled work" });
   }
 
-  // Mobility routine from pool — pick first region that has one available
-  const regions = a.mobility_regions || [];
-  const hasMobility = layers.includes("mobility") || a.primary_goal === "mobility_only";
-  if (hasMobility && regions.length > 0 && typeof poolMobilityRoutine === "function") {
-    for (let ri = 0; ri < regions.length; ri++) {
-      const routine = poolMobilityRoutine(regions[ri], 1);
+  // Mobility routine from pool — user-picked + injury-derived regions (fix 2a + 2b).
+  const injuryRegions = derivedRegionsFromInjuries(a);
+  const regions = (a.mobility_regions || []).concat(injuryRegions);
+  const uniqueRegions = [];
+  regions.forEach(r => { if (uniqueRegions.indexOf(r) === -1) uniqueRegions.push(r); });
+  const hasMobility = layers.includes("mobility") || a.primary_goal === "mobility_only" || uniqueRegions.length > 0;
+
+  if (hasMobility && uniqueRegions.length > 0 && typeof poolMobilityRoutine === "function") {
+    for (let ri = 0; ri < uniqueRegions.length; ri++) {
+      const routine = poolMobilityRoutine(uniqueRegions[ri], 1);
       if (routine && routine.moves && routine.moves.length > 0) {
         tasks.push({
-          task: `${capitalize(regions[ri])} mobility routine`,
+          task: `${capitalize(uniqueRegions[ri])} mobility routine`,
           notes: `${routine.moves.length} drills · 15–20 min`,
           mobility_moves: routine.moves,
         });
         break;
       }
     }
-  } else if (hasMobility && regions.length === 0) {
+  } else if (hasMobility && uniqueRegions.length === 0) {
     tasks.push({ task: "General mobility routine", notes: "15–20 min · full-body flow" });
   }
 
-  return { name: dayName, title: "Active Recovery", type: "rest", tasks };
+  // Rehab / specific-issue routine pools — used at render time to rotate
+  // across weeks. Solo pool replaces the day entirely on its assigned weeks;
+  // non-solo pool appends as an extra task.
+  const routineIds = allSelectedRoutineIds(a);
+  const pools = splitRoutinePools(routineIds);
+
+  return {
+    name: dayName,
+    title: "Active Recovery",
+    type: "rest",
+    tasks,
+    _rehab_solo_pool: pools.solo,
+    _rehab_nonsolo_pool: pools.nonSolo,
+  };
 }
 
 // ---------- TRAINING DAY ----------

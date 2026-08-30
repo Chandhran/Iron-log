@@ -417,7 +417,15 @@ body{
   font-size:0.88rem;
 }
 .task-row:last-child{border-bottom:none;}
-.task-note{color:var(--chalk-dim);font-size:0.78rem;}
+.task-note{color:var(--chalk-dim);font-size:0.78rem;display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+.rehab-video-btn{
+  display:inline-block;padding:4px 10px;border-radius:6px;
+  background:#c0392b;color:#fff !important;text-decoration:none;
+  font-size:0.72rem;font-weight:600;letter-spacing:.02em;
+  border:1px solid #a03024;
+}
+.rehab-video-btn:hover{background:#a03024;}
+.rehab-video-btn-inline{margin-top:6px;align-self:flex-start;}
 .task-row-check{cursor:pointer;align-items:center;}
 .task-check-left{display:flex;align-items:center;gap:10px;}
 .task-check-left input[type="checkbox"]{

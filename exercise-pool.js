@@ -170,6 +170,32 @@ function poolPrescription(name, goal) {
 // Returns the routine for a given region and week. Regions: hip, shoulder, posture, hamstring
 function poolMobilityRoutine(region, week) {
   var guides = EXERCISE_POOL_RAW.mobility_guides || {};
+
+  // Built-in ankle / wrist routines (fix 2a — not in the raw pool)
+  var BUILTIN_ANKLE = [
+    { name: "Ankle Circles",           sets: 2, reps: "10 each direction" },
+    { name: "Wall Ankle Dorsiflexion", sets: 3, reps: "10 each side" },
+    { name: "Weighted Deep Squat Hold", sets: 2, hold: "45–60s" },
+    { name: "Tibialis Raise",          sets: 3, reps: "15" },
+    { name: "Standing Calf Stretch",   sets: 2, hold: "30s each side" },
+    { name: "Elevated Toe Stretch",    sets: 2, hold: "30s each side" },
+  ];
+  var BUILTIN_WRIST = [
+    { name: "Wrist Circles",              sets: 2, reps: "10 each direction" },
+    { name: "Wrist Flexor Stretch",       sets: 2, hold: "30s each side" },
+    { name: "Wrist Extensor Stretch",     sets: 2, hold: "30s each side" },
+    { name: "Prayer Stretch",             sets: 2, hold: "30s" },
+    { name: "Reverse Prayer Stretch",     sets: 2, hold: "30s" },
+    { name: "Wrist Push-Ups (Knuckle/Back-of-Hand)", sets: 2, reps: "8–10" },
+    { name: "Finger Extensions (Band)",   sets: 2, reps: "15" },
+  ];
+  if (region === "ankle" || region === "ankles") {
+    return { region: "ankle_mobility", moves: BUILTIN_ANKLE };
+  }
+  if (region === "wrist" || region === "wrists" || region === "wrists_m") {
+    return { region: "wrist_mobility", moves: BUILTIN_WRIST };
+  }
+
   var regionKey = ({
     hip: "hip_mobility", hips: "hip_mobility",
     shoulder: "shoulder_mobility", shoulders: "shoulder_mobility",
@@ -210,7 +236,7 @@ function poolSubstitutionsFor(name) {
 
 // ---- MOBILITY REGIONS (for intake) ----
 function poolMobilityRegions() {
-  return ["hip","shoulder","posture","hamstring"];
+  return ["hip","shoulder","posture","hamstring","ankle","wrist"];
 }
 
 // ---- WOMEN'S SPECIALIZATION PROGRAM (fixed 4-week × 3-day) ----

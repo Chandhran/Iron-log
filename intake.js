@@ -215,6 +215,12 @@ const INTAKE_STEPS = [
       ]},
   ]},
 
+  { id: "specific_issues_step", title: "Specific issues (optional)", questions: [
+    { id: "specific_issues", label: "Any specific issues you want targeted mobility / rehab routines for? (Optional — pick as many as apply)", type: "multi",
+      options: (typeof REHAB_ROUTINES !== "undefined" ? REHAB_ROUTINES : []).map(function(r){ return { v: r.id, l: r.label }; }),
+    },
+  ]},
+
   { id: "lifestyle", title: "Lifestyle", questions: [
     { id: "sleep_quality", label: "How's your sleep on average?", type: "single",
       options: [
