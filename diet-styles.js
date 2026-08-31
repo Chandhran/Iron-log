@@ -53,9 +53,16 @@ function rebalanceMacroPct(changedKey, newVal, current) {
 // Uses the existing Train program: today is a "training day" if the current
 // week/day in the program is a training day type, else "rest day".
 function isTodayATrainingDay() {
-  const phase = PROGRAM[phaseForWeek(state.week)];
-  const day = phase.days[state.dayIndex];
-  return day.type === "training";
+  try {
+    // Today's day-of-week (Mon=0..Sun=6) so the calorie split follows the
+    // actual calendar day, not whichever day the user last opened in Train.
+    const jsDay = new Date().getDay();      // Sun=0..Sat=6
+    const todayIdx = (jsDay + 6) % 7;       // Mon=0..Sun=6
+    const key = (typeof getPhaseForWeek === "function") ? getPhaseForWeek(state.week) : phaseForWeek(state.week);
+    const phase = PROGRAM[key];
+    if (!phase || !phase.days || !phase.days[todayIdx]) return false;
+    return phase.days[todayIdx].type === "training";
+  } catch (e) { return false; }
 }
 
 function carbCyclingMacrosForToday(calories) {
@@ -66,21 +73,61 @@ function carbCyclingMacrosForToday(calories) {
   };
 }
 
+// Dynamic zigzag swing: 15–20% around goal calories, scaled to last week's
+// working-set volume. Higher weekly volume → bigger swing (needs more fuel on
+// training days, deeper deficit on rest days). Enforces the weekly average
+// still lands on goalCalories regardless of goal vs maintenance.
+function zigzagSwingPct() {
+  const MIN_SWING = 0.15, MAX_SWING = 0.20;
+  const LOW_VOL_SETS = 40;   // ~beginner / very-light week
+  const HIGH_VOL_SETS = 120; // ~advanced high-frequency week
+  let totalSets = 0;
+  try {
+    if (typeof sessions !== "undefined" && Array.isArray(sessions)) {
+      const nowMs = Date.now();
+      const weekAgoMs = nowMs - 7 * 86400000;
+      sessions.filter(s => !s.rest).forEach(s => {
+        const t = s.date ? new Date(s.date + "T00:00:00").getTime() : 0;
+        if (t < weekAgoMs) return;
+        (s.exercises || []).forEach(ex => { totalSets += (ex.sets || []).length; });
+      });
+    }
+  } catch (e) {}
+  const clamped = Math.max(LOW_VOL_SETS, Math.min(HIGH_VOL_SETS, totalSets));
+  const t = (clamped - LOW_VOL_SETS) / (HIGH_VOL_SETS - LOW_VOL_SETS);
+  return MIN_SWING + t * (MAX_SWING - MIN_SWING);
+}
+
 function zigzagCaloriesForToday(maintenanceCalories, goalCalories) {
-  // Weekly average must equal goalCalories. Training days run higher (closer to
-  // maintenance), rest days run lower, while the week nets out to the target.
-  const weeklyTarget = goalCalories * 7;
-  const trainDayCal = Math.round((maintenanceCalories + goalCalories) / 2);
-  // Solve rest-day calories so 7-day total hits weeklyTarget, assuming ~4 train/3 rest split typical of this program
-  // (recomputed dynamically from actual program day types across the current week)
-  const phase = PROGRAM[phaseForWeek(state.week)];
-  const trainDays = phase.days.filter(d => d.type === "training").length;
-  const restDays = 7 - trainDays;
-  const restDayCal = restDays > 0 ? Math.round((weeklyTarget - trainDayCal * trainDays) / restDays) : goalCalories;
+  // Weekly average = goalCalories (or maintenance if goal missing).
+  // Train days: goal × (1 + swing). Rest days: solved so weekly total balances.
+  const baseGoal = goalCalories || maintenanceCalories;
+  const weeklyTarget = baseGoal * 7;
+  const swing = zigzagSwingPct();
+
+  let trainDays = 4, restDays = 3;
+  try {
+    const key = (typeof getPhaseForWeek === "function") ? getPhaseForWeek(state.week) : phaseForWeek(state.week);
+    const phase = PROGRAM[key];
+    if (phase && phase.days) {
+      trainDays = phase.days.filter(d => d.type === "training").length;
+      restDays = phase.days.length - trainDays;
+    }
+  } catch (e) {}
+
+  const trainDayCal = Math.round(baseGoal * (1 + swing));
+  const restDayCal = restDays > 0
+    ? Math.round((weeklyTarget - trainDayCal * trainDays) / restDays)
+    : Math.round(baseGoal * (1 - swing));
+
   return {
-    trainDayCal, restDayCal,
+    trainDayCal,
+    restDayCal,
+    swingPct: Math.round(swing * 100),
     todayCal: isTodayATrainingDay() ? trainDayCal : restDayCal,
-    dayLabel: isTodayATrainingDay() ? "Higher-calorie day (training)" : "Lower-calorie day (rest)",
+    dayLabel: isTodayATrainingDay()
+      ? `Higher-calorie day (training, +${Math.round(swing * 100)}%)`
+      : `Lower-calorie day (rest)`,
   };
 }
 

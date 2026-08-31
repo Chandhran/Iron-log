@@ -144,8 +144,11 @@
           <option value="1.725">Active (6-7 days/week)</option>
           <option value="1.9">Very active (physical job + training)</option>
         </select>
-        <label class="field-label" for="fpGoalType">Target weight (kg) — optional, for the Progress graph</label>
+        <label class="field-label" for="fpGoalType">Target weight (kg)</label>
         <input type="number" id="fpTargetWeight" step="0.1" placeholder="e.g. 90">
+        <label class="field-label" for="fpTargetDate" style="margin-top:8px;">Target date to reach that weight</label>
+        <input type="date" id="fpTargetDate">
+        <div id="fpTimelineNote" class="chart-empty-note" style="text-align:left;padding:6px 0;font-size:0.78rem;"></div>
         <button class="save-btn" id="fpCalcBtn" style="margin-top:10px;">Calculate calorie options</button>
       </div>
 

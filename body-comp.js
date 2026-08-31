@@ -248,6 +248,12 @@ async function handleBodyCompScreenshotFile(file) {
       if (existingIdx >= 0) weightLogs[existingIdx].weight = saved.weightKg;
       else weightLogs.push({ date: saved.date, weight: saved.weightKg });
       if (typeof saveWeightLogs === "function") saveWeightLogs(weightLogs);
+
+      // Feed the fresh weight back into the timeline plan so daily calorie
+      // target stays honest as the user progresses toward their goal date.
+      if (typeof recomputeGoalCaloriesFromLatestWeight === "function") {
+        recomputeGoalCaloriesFromLatestWeight(saved.weightKg);
+      }
     }
 
     if (typeof showToast === "function") showToast("Body composition entry saved");
@@ -546,6 +552,9 @@ function initBodyStatsUI() {
         weightLogs = weightLogs.filter(w => w.date !== today);
         weightLogs.push({ date: today, weightKg: val });
         if (typeof saveWeightLogs === "function") saveWeightLogs(weightLogs);
+      }
+      if (typeof recomputeGoalCaloriesFromLatestWeight === "function") {
+        recomputeGoalCaloriesFromLatestWeight(val);
       }
       if (typeof showToast === "function") showToast("Weight logged");
       if (typeof syncPush === "function") syncPush("Log daily weight");

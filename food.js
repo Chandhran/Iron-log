@@ -369,7 +369,7 @@ function refreshCyclingInfo() {
     titleEl.textContent = "Zigzag Calorie Diet";
     const maintenance = JSON.parse(document.getElementById("fpGoalsPanel").dataset.profile || "{}").maintenanceCalories || calories;
     const z = zigzagCaloriesForToday(maintenance, calories);
-    bodyEl.innerHTML = `Training days: ~${z.trainDayCal} kcal. Rest days: ~${z.restDayCal} kcal. Weekly average lands on your ${calories} kcal target.`;
+    bodyEl.innerHTML = `Training days: ~${z.trainDayCal} kcal (+${z.swingPct}%). Rest days: ~${z.restDayCal} kcal. Weekly average lands on your ${calories} kcal target. Swing auto-adjusts (15–20%) based on last week's training volume.`;
   }
 }
 
@@ -407,6 +407,88 @@ function updateHyperbolicDietNote() {
 }
 
 // ---------- SETUP FLOW ----------
+// ---------- TIMELINE-DRIVEN CALORIE PLANNING ----------
+// Safety limits: max 1 kg/week loss, max 0.5 kg/week gain.
+const MAX_LOSS_KG_PER_WEEK = 1.0;
+const MAX_GAIN_KG_PER_WEEK = 0.5;
+
+function daysBetween(fromISO, toISO) {
+  const a = new Date(fromISO + "T00:00:00");
+  const b = new Date(toISO + "T00:00:00");
+  return Math.round((b - a) / 86400000);
+}
+function addDaysISO(fromISO, days) {
+  const d = new Date(fromISO + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function safestReachableDate(currentKg, targetKg) {
+  const diff = currentKg - targetKg; // + for loss, − for gain
+  const weeksNeeded = diff >= 0
+    ? diff / MAX_LOSS_KG_PER_WEEK
+    : (-diff) / MAX_GAIN_KG_PER_WEEK;
+  return addDaysISO(todayISO(), Math.ceil(weeksNeeded * 7));
+}
+// Returns { goalCalories, deficitPerDay, safe, safeDate, weeklyRateKg, note }
+function computeTimelinePlan(currentKg, targetKg, targetDateISO, maintenanceCalories) {
+  if (!currentKg || !targetKg || !targetDateISO || !maintenanceCalories) return null;
+  const days = daysBetween(todayISO(), targetDateISO);
+  if (days <= 0) return { safe: false, note: "Target date must be in the future.", safeDate: safestReachableDate(currentKg, targetKg) };
+
+  const diffKg = currentKg - targetKg; // + = need to lose, − = need to gain
+  const totalKcal = diffKg * KCAL_PER_KG;
+  const deficitPerDay = Math.round(totalKcal / days);
+  const weeklyRateKg = (diffKg / days) * 7;
+
+  let safe = true;
+  let note = "";
+  if (diffKg > 0 && weeklyRateKg > MAX_LOSS_KG_PER_WEEK) {
+    safe = false;
+    note = `You're aiming for ${weeklyRateKg.toFixed(2)} kg/week loss — over the safe 1 kg/week limit.`;
+  } else if (diffKg < 0 && (-weeklyRateKg) > MAX_GAIN_KG_PER_WEEK) {
+    safe = false;
+    note = `You're aiming for ${(-weeklyRateKg).toFixed(2)} kg/week gain — over the safe 0.5 kg/week limit.`;
+  }
+
+  const goalCalories = Math.max(1000, Math.round(maintenanceCalories - deficitPerDay));
+  return {
+    safe,
+    goalCalories,
+    deficitPerDay,
+    weeklyRateKg,
+    safeDate: safe ? null : safestReachableDate(currentKg, targetKg),
+    note,
+    days,
+  };
+}
+
+function refreshTimelineNote() {
+  const noteEl = document.getElementById("fpTimelineNote");
+  if (!noteEl) return;
+  const base = JSON.parse(document.getElementById("fpGoalsPanel").dataset.profile || "{}");
+  const targetKg = parseFloat(document.getElementById("fpTargetWeight").value) || null;
+  const targetDate = document.getElementById("fpTargetDate").value || null;
+  const currentKg = parseFloat(document.getElementById("fpWeight").value) || base.weightKg;
+  const maint = base.maintenanceCalories;
+  if (!targetKg || !targetDate || !currentKg || !maint) { noteEl.textContent = ""; return; }
+  const plan = computeTimelinePlan(currentKg, targetKg, targetDate, maint);
+  if (!plan) { noteEl.textContent = ""; return; }
+  if (!plan.safe) {
+    const safeDateFmt = new Date(plan.safeDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    noteEl.style.color = "#e74c3c";
+    noteEl.textContent = `⚠ ${plan.note} Earliest safely reachable: ${safeDateFmt}. Pick that date or a later one.`;
+  } else {
+    noteEl.style.color = "";
+    const dirWord = plan.deficitPerDay >= 0 ? "deficit" : "surplus";
+    noteEl.textContent = `To hit ${targetKg} kg by that date: ${Math.abs(plan.deficitPerDay)} kcal/day ${dirWord} → ${plan.goalCalories} kcal/day. Rate: ${plan.weeklyRateKg.toFixed(2)} kg/week.`;
+  }
+}
+["fpTargetWeight", "fpTargetDate", "fpWeight"].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("input", refreshTimelineNote);
+  if (el) el.addEventListener("change", refreshTimelineNote);
+});
+
 document.getElementById("fpCalcBtn").addEventListener("click", () => {
   const age = parseFloat(document.getElementById("fpAge").value);
   const gender = document.getElementById("fpGender").value;
@@ -414,6 +496,7 @@ document.getElementById("fpCalcBtn").addEventListener("click", () => {
   const weightKg = parseFloat(document.getElementById("fpWeight").value);
   const activity = document.getElementById("fpActivity").value;
   const targetWeightKg = parseFloat(document.getElementById("fpTargetWeight").value) || null;
+  const targetDate = document.getElementById("fpTargetDate").value || null;
   if (!age || !heightCm || !weightKg) { showToast("Fill in age, height, and weight"); return; }
 
   const bmr = gender === "female"
@@ -422,23 +505,63 @@ document.getElementById("fpCalcBtn").addEventListener("click", () => {
   const maintenanceCalories = Math.round(bmr * parseFloat(activity));
   const { bmi, category } = calcBMI(weightKg, heightCm);
 
+  // Timeline safety gate — block save when target date requires an unsafe rate.
+  if (targetWeightKg && targetDate) {
+    const plan = computeTimelinePlan(weightKg, targetWeightKg, targetDate, maintenanceCalories);
+    if (plan && !plan.safe) {
+      const safeDateFmt = new Date(plan.safeDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+      showToast(`${plan.note} Earliest safe date: ${safeDateFmt}. Change the date to that or later.`);
+      return;
+    }
+  }
+
   document.getElementById("bmiGaugePanel").style.display = "block";
   drawBMIGauge(document.getElementById("bmiGaugeCanvas"), bmi);
   document.getElementById("bmiGaugeValue").innerHTML = `BMI = ${bmi} <span class="bmi-cat">${category}</span>`;
 
   document.getElementById("rateOptionsPanel").style.display = "block";
-  selectedRateKey = "maintain";
+  // If a target date was given, precompute the goal calories from it and
+  // pre-select a matching rate; otherwise default to maintain.
+  let precomputedGoalCal = null;
+  if (targetWeightKg && targetDate) {
+    const plan = computeTimelinePlan(weightKg, targetWeightKg, targetDate, maintenanceCalories);
+    if (plan && plan.safe) precomputedGoalCal = plan.goalCalories;
+  }
+  selectedRateKey = precomputedGoalCal ? "timeline" : "maintain";
   renderRateOptions(maintenanceCalories, weightKg);
-  document.getElementById("fpGoalCal").value = maintenanceCalories;
+  document.getElementById("fpGoalCal").value = precomputedGoalCal || maintenanceCalories;
 
-  setupProfileBase = { age, gender, heightCm, weightKg, activity, targetWeightKg, maintenanceCalories, bmi, bmiCategory: category };
+  setupProfileBase = { age, gender, heightCm, weightKg, activity, targetWeightKg, targetDate, maintenanceCalories, bmi, bmiCategory: category };
   document.getElementById("fpGoalsPanel").dataset.profile = JSON.stringify(setupProfileBase);
 
   document.getElementById("dietStylePanel").style.display = "block";
   renderDietStyleGrid();
   applyDietStyleSelection();
   document.getElementById("fpSaveBtn").style.display = "block";
+  refreshTimelineNote();
 });
+
+// PUBLIC: called by body-comp when a new weight is logged.
+// Re-runs the timeline plan using the fresh weight against the stored target
+// date, and updates goalCalories in the saved profile so the daily target
+// stays honest as the user progresses.
+function recomputeGoalCaloriesFromLatestWeight(newWeightKg) {
+  const p = loadFoodProfile();
+  if (!p || !newWeightKg) return;
+  if (!p.targetWeightKg || !p.targetDate) return;
+  // Recompute maintenance with the new weight so BMR is honest too.
+  const bmr = p.gender === "female"
+    ? 10 * newWeightKg + 6.25 * p.heightCm - 5 * p.age - 161
+    : 10 * newWeightKg + 6.25 * p.heightCm - 5 * p.age + 5;
+  const maintenanceCalories = Math.round(bmr * parseFloat(p.activity));
+  const plan = computeTimelinePlan(newWeightKg, p.targetWeightKg, p.targetDate, maintenanceCalories);
+  if (!plan || !plan.safe) return;
+  p.weightKg = newWeightKg;
+  p.maintenanceCalories = maintenanceCalories;
+  p.goalCalories = plan.goalCalories;
+  p.lastAutoRecalcAt = new Date().toISOString();
+  saveFoodProfile(p);
+}
 
 document.getElementById("fpSaveBtn").addEventListener("click", () => {
   const base = JSON.parse(document.getElementById("fpGoalsPanel").dataset.profile || "{}");
@@ -487,6 +610,7 @@ document.getElementById("foodEditGoalsBtn").addEventListener("click", () => {
   document.getElementById("fpWeight").value = p.weightKg;
   document.getElementById("fpActivity").value = p.activity;
   if (p.targetWeightKg) document.getElementById("fpTargetWeight").value = p.targetWeightKg;
+  if (p.targetDate) document.getElementById("fpTargetDate").value = p.targetDate;
 
   document.getElementById("bmiGaugePanel").style.display = "block";
   drawBMIGauge(document.getElementById("bmiGaugeCanvas"), p.bmi);
