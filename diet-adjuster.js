@@ -145,6 +145,38 @@ function targetRateForGoal(goal) {
   }
 }
 
+// --- Deadline-aware projection ---
+// When profile has targetWeightKg + targetDate, compute required weekly rate
+// to reach the target on time, given the current weight trend.
+function deadlineTargetRate(profile, rate) {
+  if (!profile.targetWeightKg || !profile.targetDate) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const daysLeft = daysBetween(today, profile.targetDate);
+  if (daysLeft <= 0) return null;
+
+  const currentKg = rate.lastWeightKg;
+  if (!currentKg) return null;
+  const diffKg = currentKg - profile.targetWeightKg; // + = need to lose, − = need to gain
+  const requiredRateKgPerWeek = (diffKg / daysLeft) * 7;
+  const requiredRatePctPerWeek = (requiredRateKgPerWeek / currentKg) * 100;
+
+  // Determine safe bounds
+  const losing = diffKg > 0;
+  const safeMaxKgPerWeek = losing ? 1.0 : 0.5;
+
+  // Ideal rate as %/week: negative for loss, positive for gain
+  const idealPct = losing ? -Math.abs(requiredRatePctPerWeek) : Math.abs(requiredRatePctPerWeek);
+  // Add a small tolerance band (±0.1%/wk)
+  return {
+    min: idealPct - 0.1,
+    max: idealPct + 0.1,
+    label: losing ? "cut" : "bulk",
+    deadline: true,
+    daysLeft,
+    requiredRateKgPerWeek,
+  };
+}
+
 // --- Main decision engine ---
 // Returns { adjustment, reason } or null if no adjustment needed / possible.
 function decideAdjustment(opts) {
@@ -158,7 +190,8 @@ function decideAdjustment(opts) {
   if (daysSinceLastAdjustment() < MIN_DAYS_BETWEEN_ADJUSTMENTS) return null;
 
   const goal = profile.primary_goal || profile.goal || "maintain";
-  const target = targetRateForGoal(goal);
+  // Use deadline-based target if set, otherwise generic goal range
+  const target = deadlineTargetRate(profile, rate) || targetRateForGoal(goal);
   const actual = rate.weightRatePctPerWeek;
 
   // Protein-first rule: if cutting AND muscle mass is dropping >0.25 kg/week,

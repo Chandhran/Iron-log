@@ -19,6 +19,27 @@ let myFoods = loadMyFoods();
 let currentFoodDate = todayISO();
 let activeAddMealType = "Breakfast";
 
+// ---------- IFCT 2017 Indian Food Database ----------
+let ifctFoods = [];
+fetch("./ifct-foods.json")
+  .then(r => r.ok ? r.json() : [])
+  .then(d => { ifctFoods = d; })
+  .catch(() => {});
+
+function searchIFCT(query, limit = 10) {
+  if (!ifctFoods.length || !query) return [];
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const scored = [];
+  for (const f of ifctFoods) {
+    const hay = f.n.toLowerCase();
+    let match = 0;
+    for (const t of terms) { if (hay.includes(t)) match++; }
+    if (match > 0) scored.push({ food: f, score: match / terms.length + (hay.startsWith(terms[0]) ? 0.5 : 0) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map(s => s.food);
+}
+
 // ---------- MICRONUTRIENT REFERENCE (standard adult RDA) ----------
 // ---------- MICRONUTRIENT RDA (age & sex aware, per NIH ODS DRIs) ----------
 // Each entry declares its measurement unit and how to compute the daily
@@ -114,6 +135,10 @@ const USDA_NUTRIENT_MAP = [
   ["Copper, Cu", "copper", "mcg"],
   ["Manganese, Mn", "manganese", "mg"],
   ["Selenium, Se", "selenium", "mcg"],
+  ["Choline, total", "choline", "mg"],
+  ["Iodine, I", "iodine", "mcg"],
+  ["Chromium, Cr", "chromium", "mcg"],
+  ["Molybdenum, Mo", "molybdenum", "mcg"],
 ];
 
 function emptyMicros() {
@@ -745,7 +770,7 @@ function renderFoodDaily() {
     totals.protein += l.protein || 0;
     totals.carbs += l.carbs || 0;
     totals.fat += l.fat || 0;
-    Object.keys(totals.micros).forEach(k => { totals.micros[k] += (l.micros && l.micros[k]) || 0; });
+    if (l.micros) Object.keys(l.micros).forEach(k => { totals.micros[k] = (totals.micros[k] || 0) + (l.micros[k] || 0); });
   });
 
   const goals = todaysGoals(profile);
@@ -799,6 +824,7 @@ function renderFoodDaily() {
   }
 
   renderMealSections(dayLogs);
+  renderPillChecklist(currentFoodDate);
   renderMicroPanel(totals.micros, profile);
 }
 
@@ -848,6 +874,118 @@ function drawMacroRing(canvasId, consumed, goal, color) {
 
 const MEAL_TYPES = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
+// ---------- PILL / MEDICATION CHECKLIST ----------
+const PILLS_LIST_KEY = "ironlog_pills_list_v1";
+const PILLS_LOG_KEY = "ironlog_pills_log_v1";
+function loadPillsList() { try { return JSON.parse(localStorage.getItem(PILLS_LIST_KEY)) || []; } catch { return []; } }
+function savePillsList(list) { localStorage.setItem(PILLS_LIST_KEY, JSON.stringify(list)); }
+function loadPillsLog() { try { return JSON.parse(localStorage.getItem(PILLS_LOG_KEY)) || {}; } catch { return {}; } }
+function savePillsLog(log) { localStorage.setItem(PILLS_LOG_KEY, JSON.stringify(log)); }
+
+function renderPillChecklist(dateStr) {
+  let container = document.getElementById("pillChecklist");
+  if (!container) return;
+  const pills = loadPillsList();
+  if (pills.length === 0) {
+    container.innerHTML = `<div class="pill-section">
+      <div class="meal-section-head">
+        <span class="meal-section-title">💊 Medications</span>
+        <button class="meal-add-btn" id="pillSetupBtn">+</button>
+      </div>
+      <div class="chart-empty-note" style="padding:8px 0;">No pills set up yet. Tap + to add your medications.</div>
+    </div>`;
+    document.getElementById("pillSetupBtn").addEventListener("click", openPillSetup);
+    return;
+  }
+
+  const log = loadPillsLog();
+  const dayLog = log[dateStr] || {};
+  container.innerHTML = `<div class="pill-section">
+    <div class="meal-section-head">
+      <span class="meal-section-title">💊 Medications</span>
+      <button class="meal-add-btn" id="pillSetupBtn" style="font-size:0.7rem;">✎</button>
+    </div>
+    ${pills.map((p, i) => {
+      const checked = dayLog[p.name] ? "checked" : "";
+      return `<label class="pill-row">
+        <input type="checkbox" class="pill-check" data-pill="${p.name}" ${checked}>
+        <span class="pill-name">${p.name}</span>
+        ${p.dose ? `<span class="pill-dose">${p.dose}</span>` : ""}
+      </label>`;
+    }).join("")}
+  </div>`;
+
+  container.querySelectorAll(".pill-check").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const log = loadPillsLog();
+      if (!log[dateStr]) log[dateStr] = {};
+      if (cb.checked) log[dateStr][cb.dataset.pill] = true;
+      else delete log[dateStr][cb.dataset.pill];
+      savePillsLog(log);
+    });
+  });
+  document.getElementById("pillSetupBtn").addEventListener("click", openPillSetup);
+}
+
+function openPillSetup() {
+  const pills = loadPillsList();
+  const html = `
+    <div class="modal-title">Manage Medications</div>
+    <div id="pillSetupList">
+      ${pills.map((p, i) => `
+        <div class="pill-setup-row" style="display:flex;gap:6px;margin:4px 0;align-items:center;">
+          <input type="text" value="${p.name}" class="pill-setup-name" style="flex:1;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;">
+          <input type="text" value="${p.dose || ""}" placeholder="dose" class="pill-setup-dose" style="width:80px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;">
+          <button class="pill-del-btn" data-i="${i}" style="background:none;border:none;color:var(--chalk-dim);cursor:pointer;font-size:1.1rem;">✕</button>
+        </div>
+      `).join("")}
+    </div>
+    <button id="pillSetupAddRow" style="background:none;border:1px dashed var(--line);color:var(--chalk-dim);padding:6px;border-radius:6px;width:100%;margin-top:6px;cursor:pointer;font-size:0.82rem;">+ Add medication</button>
+    <button class="save-btn" id="pillSetupSave" style="margin-top:10px;">Save</button>
+  `;
+  // Reuse generic overlay pattern
+  let overlay = document.getElementById("pillSetupOverlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "pillSetupOverlay";
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `<div class="modal-box"><div class="modal-body" id="pillSetupBody"></div></div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("active"); });
+  }
+  document.getElementById("pillSetupBody").innerHTML = html;
+  overlay.classList.add("active");
+
+  document.getElementById("pillSetupAddRow").addEventListener("click", () => {
+    const row = document.createElement("div");
+    row.className = "pill-setup-row";
+    row.style.cssText = "display:flex;gap:6px;margin:4px 0;align-items:center;";
+    row.innerHTML = `
+      <input type="text" placeholder="Pill name" class="pill-setup-name" style="flex:1;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;">
+      <input type="text" placeholder="dose" class="pill-setup-dose" style="width:80px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;">
+      <button class="pill-del-btn" style="background:none;border:none;color:var(--chalk-dim);cursor:pointer;font-size:1.1rem;">✕</button>`;
+    document.getElementById("pillSetupList").appendChild(row);
+    row.querySelector(".pill-del-btn").addEventListener("click", () => row.remove());
+  });
+
+  document.querySelectorAll(".pill-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => btn.closest(".pill-setup-row").remove());
+  });
+
+  document.getElementById("pillSetupSave").addEventListener("click", () => {
+    const names = document.querySelectorAll(".pill-setup-name");
+    const doses = document.querySelectorAll(".pill-setup-dose");
+    const newList = [];
+    names.forEach((input, i) => {
+      const name = input.value.trim();
+      if (name) newList.push({ name, dose: doses[i] ? doses[i].value.trim() : "" });
+    });
+    savePillsList(newList);
+    overlay.classList.remove("active");
+    renderPillChecklist(currentFoodDate);
+  });
+}
+
 function renderMealSections(dayLogs) {
   const container = document.getElementById("mealSections");
   container.innerHTML = "";
@@ -884,7 +1022,10 @@ function renderMealSections(dayLogs) {
     btn.addEventListener("click", () => {
       activeAddMealType = btn.dataset.meal;
       document.getElementById("foodModalMealLabel").textContent = activeAddMealType;
+      document.getElementById("foodSearchInput").value = "";
+      document.getElementById("foodSearchResults").innerHTML = "";
       openModal("foodModalOverlay");
+      renderRecentFoods();
     });
   });
   container.querySelectorAll(".food-item-del").forEach(btn => {
@@ -897,24 +1038,114 @@ function renderMealSections(dayLogs) {
   });
 }
 
+const RARE_MICROS = new Set(["iodine", "chromium", "molybdenum"]);
+
+function _microRowHtml(key, info, consumedMicros, profile) {
+  const rda = micronutrientRDA(key, profile);
+  const consumed = consumedMicros[key] || 0;
+  const pctRaw = rda > 0 ? (consumed / rda) * 100 : 0;
+  const pct = Math.min(100, Math.round(pctRaw));
+  const met = pctRaw >= 100;
+  const color = met ? "#00D2D3" : pctRaw >= 50 ? "#FFC94A" : "#FF6B4A";
+  return `
+    <div class="micro-row ${met ? 'micro-row-met' : ''}">
+      <div class="micro-row-top">
+        <span class="micro-name">${met ? '✓ ' : ''}${info.name}</span>
+        <span class="micro-amount">${consumed.toFixed(1)} / ${rda}${info.unit}</span>
+      </div>
+      <div class="micro-bar-track"><div class="micro-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+    </div>`;
+}
+
 function renderMicroPanel(consumedMicros, profile) {
   const panel = document.getElementById("microPanel");
-  panel.innerHTML = Object.entries(MICRO_RDA).map(([key, info]) => {
-    const rda = micronutrientRDA(key, profile);
-    const consumed = consumedMicros[key] || 0;
-    const pctRaw = rda > 0 ? (consumed / rda) * 100 : 0;
-    const pct = Math.min(100, Math.round(pctRaw));
-    const met = pctRaw >= 100;
-    const color = met ? "#4ACF6B" : pctRaw >= 50 ? "#FFC94A" : "#FF6B4A";
-    return `
-      <div class="micro-row ${met ? 'micro-row-met' : ''}">
+  const commonRows = [];
+  const rareRows = [];
+  // Custom nutrients (no RDA)
+  const customNutrients = JSON.parse(localStorage.getItem("ironlog_custom_nutrients_v1") || "[]");
+
+  Object.entries(MICRO_RDA).forEach(([key, info]) => {
+    const html = _microRowHtml(key, info, consumedMicros, profile);
+    if (RARE_MICROS.has(key)) rareRows.push(html);
+    else commonRows.push(html);
+  });
+
+  // Custom nutrients — always cyan full bar when consumed > 0
+  customNutrients.forEach(cn => {
+    const consumed = consumedMicros[cn.key] || 0;
+    const hasSome = consumed > 0;
+    const color = "#00D2D3";
+    commonRows.push(`
+      <div class="micro-row ${hasSome ? 'micro-row-met' : ''}">
         <div class="micro-row-top">
-          <span class="micro-name">${met ? '✓ ' : ''}${info.name}</span>
-          <span class="micro-amount">${consumed.toFixed(1)} / ${rda}${info.unit}</span>
+          <span class="micro-name">${hasSome ? '✓ ' : ''}${cn.name}</span>
+          <span class="micro-amount">${consumed.toFixed(1)}${cn.unit}</span>
         </div>
-        <div class="micro-bar-track"><div class="micro-bar-fill" style="width:${pct}%; background:${color};"></div></div>
-      </div>`;
-  }).join("");
+        <div class="micro-bar-track"><div class="micro-bar-fill" style="width:${hasSome ? 100 : 0}%; background:${hasSome ? color : 'transparent'};"></div></div>
+      </div>`);
+  });
+
+  const rareToggle = rareRows.length > 0 ? `
+    <button class="micro-rare-toggle" onclick="this.nextElementSibling.classList.toggle('hidden');this.textContent=this.textContent.includes('Show')?'Hide uncommon':'Show uncommon (${rareRows.length})'">Show uncommon (${rareRows.length})</button>
+    <div class="micro-rare-section hidden">${rareRows.join("")}</div>` : "";
+
+  panel.innerHTML = commonRows.join("") + rareToggle;
+}
+
+// ---------- RECENTLY USED FOODS ----------
+function getRecentFoods(limit = 10) {
+  const seen = new Set();
+  const recent = [];
+  // Walk food logs newest-first, deduplicate by name
+  const sorted = foodLogs.slice().sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (b.id || "").localeCompare(a.id || "");
+  });
+  for (const entry of sorted) {
+    const key = (entry.name || "").toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    recent.push(entry);
+    if (recent.length >= limit) break;
+  }
+  return recent;
+}
+
+function renderRecentFoods(filterText) {
+  const container = document.getElementById("recentFoodsSection");
+  if (!container) return;
+  let recents = getRecentFoods(15);
+  if (filterText) {
+    const q = filterText.toLowerCase();
+    recents = recents.filter(r => (r.name || "").toLowerCase().includes(q));
+  }
+  if (recents.length === 0) {
+    container.innerHTML = filterText ? "" : "";
+    container.style.display = "none";
+    return;
+  }
+  container.style.display = "block";
+  container.innerHTML = `<div class="recent-foods-label">${filterText ? "Matching recent" : "Recently used"}</div>` +
+    recents.map((r, i) => `
+      <div class="recent-food-card" data-recent-idx="${i}">
+        <div class="recent-food-name">${escapeHtml(r.name)}</div>
+        <div class="recent-food-meta">${r.grams || "—"}g · ${Math.round(r.calories || 0)} kcal · ${Math.round(r.protein || 0)}g protein</div>
+      </div>`).join("");
+  container.querySelectorAll(".recent-food-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const entry = recents[parseInt(card.dataset.recentIdx)];
+      addFoodEntry({
+        name: entry.name,
+        grams: entry.grams,
+        calories: entry.calories,
+        protein: entry.protein,
+        carbs: entry.carbs,
+        fat: entry.fat,
+        micros: entry.micros || emptyMicros(),
+        source: entry.source || "recent",
+      });
+    });
+  });
 }
 
 // ---------- ADD FOOD MODAL ----------
@@ -930,7 +1161,14 @@ document.querySelectorAll(".food-mode-btn").forEach(btn => {
     document.querySelectorAll(".food-mode-panel").forEach(p => p.classList.remove("active"));
     document.getElementById("mode-" + btn.dataset.mode).classList.add("active");
     if (btn.dataset.mode === "myfoods") renderMyFoodsList();
+    if (btn.dataset.mode === "search") renderRecentFoods();
   });
+});
+
+// Show recent foods when search input changes
+document.getElementById("foodSearchInput").addEventListener("input", (e) => {
+  const val = e.target.value.trim();
+  renderRecentFoods(val);
 });
 
 function addFoodEntry(entry) {
@@ -978,44 +1216,89 @@ document.getElementById("foodSearchBtn").addEventListener("click", async () => {
   const results = document.getElementById("foodSearchResults");
   if (!query) return;
   results.innerHTML = `<div class="chart-empty-note">Searching…</div>`;
-  try {
-    const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&pageSize=10&api_key=DEMO_KEY`);
-    if (!res.ok) throw new Error("USDA request failed");
-    const data = await res.json();
-    if (!data.foods || data.foods.length === 0) {
-      results.innerHTML = `<div class="chart-empty-note">No results. Try Manual entry instead.</div>`;
-      return;
-    }
-    results.innerHTML = data.foods.map((f, i) => `
-      <div class="food-result-item">
+
+  // Search IFCT first (local, instant)
+  const ifctResults = searchIFCT(query, 10);
+  let html = "";
+  if (ifctResults.length) {
+    html += ifctResults.map((f, i) => `
+      <div class="food-result-item" data-ifct="${i}">
         <div>
-          <div class="food-result-name">${f.description}</div>
-          <div class="food-result-sub">per 100g${f.brandOwner ? " · " + f.brandOwner : ""}</div>
+          <div class="food-result-name">${f.n}</div>
+          <div class="food-result-sub">per 100g · <span style="color:#FF9F43">IFCT</span>${f.g ? " · " + f.g : ""}</div>
         </div>
-        <input type="number" value="100" style="width:56px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;text-align:center;" id="usda-grams-${i}">
-        <button class="food-result-add" data-idx="${i}">+</button>
+        <input type="number" value="100" style="width:56px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;text-align:center;" id="ifct-grams-${i}">
+        <button class="food-result-add" data-ifct-idx="${i}">+</button>
       </div>
     `).join("");
-    results.querySelectorAll(".food-result-add").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const food = data.foods[btn.dataset.idx];
-        const grams = parseFloat(document.getElementById(`usda-grams-${btn.dataset.idx}`).value) || 100;
-        const per100 = extractUsdaMicros(food.foodNutrients);
-        const scale = grams / 100;
-        const micros = {};
-        Object.keys(per100.micros).forEach(k => micros[k] = per100.micros[k] * scale);
-        addFoodEntry({
-          name: food.description, grams,
-          calories: per100.calories * scale, protein: per100.protein * scale,
-          carbs: per100.carbs * scale, fat: per100.fat * scale,
-          micros, source: "usda",
+  }
+
+  // Show IFCT results immediately, then fetch USDA
+  if (html) results.innerHTML = html;
+  _wireIfctButtons(results, ifctResults);
+
+  try {
+    const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&pageSize=10&api_key=DEMO_KEY`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.foods && data.foods.length) {
+        html += data.foods.map((f, i) => `
+          <div class="food-result-item">
+            <div>
+              <div class="food-result-name">${f.description}</div>
+              <div class="food-result-sub">per 100g · <span style="color:#54A0FF">USDA</span>${f.brandOwner ? " · " + f.brandOwner : ""}</div>
+            </div>
+            <input type="number" value="100" style="width:56px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;text-align:center;" id="usda-grams-${i}">
+            <button class="food-result-add" data-idx="${i}">+</button>
+          </div>
+        `).join("");
+        results.innerHTML = html || `<div class="chart-empty-note">No results. Try Manual entry instead.</div>`;
+        _wireIfctButtons(results, ifctResults);
+        results.querySelectorAll("[data-idx]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const food = data.foods[btn.dataset.idx];
+            const grams = parseFloat(document.getElementById(`usda-grams-${btn.dataset.idx}`).value) || 100;
+            const per100 = extractUsdaMicros(food.foodNutrients);
+            const scale = grams / 100;
+            const micros = {};
+            Object.keys(per100.micros).forEach(k => micros[k] = per100.micros[k] * scale);
+            addFoodEntry({
+              name: food.description, grams,
+              calories: per100.calories * scale, protein: per100.protein * scale,
+              carbs: per100.carbs * scale, fat: per100.fat * scale,
+              micros, source: "usda",
+            });
+          });
         });
-      });
-    });
+      }
+    }
   } catch (e) {
-    results.innerHTML = `<div class="chart-empty-note">Couldn't reach USDA database. Check your connection or try Manual entry.</div>`;
+    if (!ifctResults.length) {
+      results.innerHTML = `<div class="chart-empty-note">Couldn't reach USDA database. Check your connection or try Manual entry.</div>`;
+    }
+  }
+  if (!results.innerHTML || results.innerHTML.includes("Searching")) {
+    results.innerHTML = `<div class="chart-empty-note">No results. Try Manual entry instead.</div>`;
   }
 });
+
+function _wireIfctButtons(container, ifctResults) {
+  container.querySelectorAll("[data-ifct-idx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const f = ifctResults[parseInt(btn.dataset.ifctIdx)];
+      const grams = parseFloat(document.getElementById(`ifct-grams-${btn.dataset.ifctIdx}`).value) || 100;
+      const scale = grams / 100;
+      const micros = {};
+      if (f.m) Object.keys(f.m).forEach(k => micros[k] = f.m[k] * scale);
+      addFoodEntry({
+        name: f.n, grams,
+        calories: f.cal * scale, protein: f.p * scale,
+        carbs: f.c * scale, fat: f.f * scale,
+        micros, source: "ifct",
+      });
+    });
+  });
+}
 
 // --- Barcode scan (Open Food Facts) ---
 let barcodeStream, barcodeDetectorInterval;
@@ -1129,6 +1412,165 @@ document.getElementById("ocrAddBtn").addEventListener("click", () => {
     fat: (parseFloat(document.getElementById("ocrFat").value) || 0) * scale,
     micros: emptyMicros(), source: "ocr",
   });
+});
+
+// --- Supplement OCR ---
+const SUPP_MICRO_PATTERNS = [
+  { key: "vitaminA", name: "Vitamin A", unit: "mcg", re: /vitamin\s*a[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg|iu)/i, iuFactor: 0.3 },
+  { key: "vitaminD", name: "Vitamin D", unit: "mcg", re: /vitamin\s*d\d?[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg|iu)/i, iuFactor: 0.025 },
+  { key: "vitaminE", name: "Vitamin E", unit: "mg", re: /vitamin\s*e[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg|iu)/i, iuFactor: 0.67 },
+  { key: "vitaminK", name: "Vitamin K", unit: "mcg", re: /vitamin\s*k\d?[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "vitaminC", name: "Vitamin C", unit: "mg", re: /vitamin\s*c[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "thiamin", name: "Thiamin (B1)", unit: "mg", re: /thiamin[e]?[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "riboflavin", name: "Riboflavin (B2)", unit: "mg", re: /riboflavin[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "niacin", name: "Niacin (B3)", unit: "mg", re: /niacin[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "pantothenic", name: "Pantothenic Acid (B5)", unit: "mg", re: /pantothenic[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "vitaminB6", name: "Vitamin B6", unit: "mg", re: /vitamin\s*b\s*6[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "biotin", name: "Biotin (B7)", unit: "mcg", re: /biotin[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "folate", name: "Folate (B9)", unit: "mcg", re: /fol(?:ate|ic)[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "vitaminB12", name: "Vitamin B12", unit: "mcg", re: /(?:vitamin\s*b\s*12|cobalamin)[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "calcium", name: "Calcium", unit: "mg", re: /calcium[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "iron", name: "Iron", unit: "mg", re: /iron[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "magnesium", name: "Magnesium", unit: "mg", re: /magnesium[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "zinc", name: "Zinc", unit: "mg", re: /zinc[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "selenium", name: "Selenium", unit: "mcg", re: /selenium[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "copper", name: "Copper", unit: "mcg", re: /copper[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "manganese", name: "Manganese", unit: "mg", re: /manganese[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "chromium", name: "Chromium", unit: "mcg", re: /chromium[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "molybdenum", name: "Molybdenum", unit: "mcg", re: /molybdenum[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "potassium", name: "Potassium", unit: "mg", re: /potassium[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "phosphorus", name: "Phosphorus", unit: "mg", re: /phosphorus[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "iodine", name: "Iodine", unit: "mcg", re: /iodine[^\d]*(\d+[\.,]?\d*)\s*(mcg|µg|ug|mg)/i },
+  { key: "choline", name: "Choline", unit: "mg", re: /choline[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "sodium", name: "Sodium", unit: "mg", re: /sodium[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+];
+
+// Extra patterns for nutrients outside the standard 26 (custom nutrients)
+const SUPP_EXTRA_PATTERNS = [
+  { key: "collagen", name: "Collagen", unit: "mg", re: /collagen[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "omega3_epa", name: "Omega-3 EPA", unit: "mg", re: /epa[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "omega3_dha", name: "Omega-3 DHA", unit: "mg", re: /dha[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "omega3", name: "Omega-3", unit: "mg", re: /omega[\s-]*3[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "lutein", name: "Lutein", unit: "mg", re: /lutein[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "lycopene", name: "Lycopene", unit: "mg", re: /lycopene[^\d]*(\d+[\.,]?\d*)\s*(mg|mcg)/i },
+  { key: "coq10", name: "CoQ10", unit: "mg", re: /co\s*q\s*10[^\d]*(\d+[\.,]?\d*)\s*(mg)/i },
+  { key: "glucosamine", name: "Glucosamine", unit: "mg", re: /glucosamine[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "ashwagandha", name: "Ashwagandha", unit: "mg", re: /ashwagandha[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+  { key: "turmeric_curcumin", name: "Turmeric/Curcumin", unit: "mg", re: /(?:turmeric|curcumin)[^\d]*(\d+[\.,]?\d*)\s*(mg|g)/i },
+];
+
+function _parseOcrUnit(valStr, unitStr, targetUnit, iuFactor) {
+  let v = parseFloat(valStr.replace(",", ".")) || 0;
+  const u = (unitStr || "").toLowerCase().replace("µg", "mcg").replace("ug", "mcg");
+  if (u === "iu" && iuFactor) { v *= iuFactor; return v; }
+  if (u === "g") v *= 1000; // g → mg
+  if (targetUnit === "mg" && u === "mcg") v /= 1000;
+  if (targetUnit === "mcg" && u === "mg") v *= 1000;
+  return v;
+}
+
+function parseSupplementLabel(text) {
+  const found = [];
+  const allPatterns = [...SUPP_MICRO_PATTERNS, ...SUPP_EXTRA_PATTERNS];
+  for (const pat of allPatterns) {
+    const m = text.match(pat.re);
+    if (m) {
+      const val = _parseOcrUnit(m[1], m[2], pat.unit, pat.iuFactor);
+      if (val > 0) found.push({ key: pat.key, name: pat.name, unit: pat.unit, value: Math.round(val * 100) / 100 });
+    }
+  }
+  return found;
+}
+
+document.getElementById("suppLabelInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById("suppOcrStatus");
+  const formEl = document.getElementById("suppOcrForm");
+  formEl.style.display = "none";
+  statusEl.textContent = "Reading supplement label…";
+  try {
+    const { data: { text } } = await Tesseract.recognize(file, "eng");
+    const nutrients = parseSupplementLabel(text);
+    const fieldsEl = document.getElementById("suppMicroFields");
+    if (nutrients.length === 0) {
+      fieldsEl.innerHTML = `<div class="chart-empty-note">No nutrients detected. You can add them manually below.</div>`;
+    } else {
+      fieldsEl.innerHTML = nutrients.map((n, i) => `
+        <div style="display:flex;gap:8px;align-items:center;margin:4px 0;">
+          <input type="text" value="${n.name}" id="suppNutrName-${i}" style="flex:1;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;">
+          <input type="number" value="${n.value}" id="suppNutrVal-${i}" style="width:70px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;text-align:right;">
+          <span style="color:var(--chalk-dim);font-size:0.8rem;width:30px;">${n.unit}</span>
+          <input type="hidden" id="suppNutrKey-${i}" value="${n.key}">
+          <input type="hidden" id="suppNutrUnit-${i}" value="${n.unit}">
+        </div>
+      `).join("");
+    }
+    // Add "add row" button for manual entries
+    fieldsEl.innerHTML += `<button type="button" id="suppAddRow" style="background:none;border:1px dashed var(--line);color:var(--chalk-dim);padding:6px;border-radius:6px;width:100%;margin-top:6px;cursor:pointer;font-size:0.82rem;">+ Add nutrient</button>`;
+    statusEl.textContent = nutrients.length > 0
+      ? `Found ${nutrients.length} nutrient${nutrients.length > 1 ? "s" : ""}. Check values, name it, then add.`
+      : "Couldn't detect nutrients automatically. Add them manually.";
+    formEl.style.display = "block";
+
+    let rowCount = nutrients.length;
+    document.getElementById("suppAddRow").addEventListener("click", () => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:8px;align-items:center;margin:4px 0;";
+      row.innerHTML = `
+        <input type="text" placeholder="Name" id="suppNutrName-${rowCount}" style="flex:1;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;">
+        <input type="number" placeholder="0" id="suppNutrVal-${rowCount}" style="width:70px;background:var(--bg-raised);border:1px solid var(--line);color:var(--chalk);border-radius:6px;padding:6px;text-align:right;">
+        <span style="color:var(--chalk-dim);font-size:0.8rem;width:30px;">mg</span>
+        <input type="hidden" id="suppNutrKey-${rowCount}" value="">
+        <input type="hidden" id="suppNutrUnit-${rowCount}" value="mg">`;
+      document.getElementById("suppAddRow").before(row);
+      rowCount++;
+    });
+  } catch (err) {
+    statusEl.textContent = "Couldn't read the label. Try a clearer photo or add nutrients manually.";
+    formEl.style.display = "block";
+  }
+});
+
+document.getElementById("suppAddBtn").addEventListener("click", () => {
+  const name = (document.getElementById("suppName").value || "").trim() || "My Supplement";
+  const micros = {};
+  const customNutrients = JSON.parse(localStorage.getItem("ironlog_custom_nutrients_v1") || "[]");
+  const knownKeys = new Set(Object.keys(MICRO_RDA));
+
+  let i = 0;
+  while (document.getElementById(`suppNutrKey-${i}`)) {
+    let key = document.getElementById(`suppNutrKey-${i}`).value;
+    const nutrName = (document.getElementById(`suppNutrName-${i}`).value || "").trim();
+    const val = parseFloat(document.getElementById(`suppNutrVal-${i}`).value) || 0;
+    const unit = document.getElementById(`suppNutrUnit-${i}`).value || "mg";
+    if (val > 0 && nutrName) {
+      if (!key) key = nutrName.toLowerCase().replace(/[\s\/\-]+/g, "_").replace(/[^a-z0-9_]/g, "");
+      micros[key] = val;
+      // If not a known RDA nutrient, register as custom
+      if (!knownKeys.has(key) && !customNutrients.find(c => c.key === key)) {
+        customNutrients.push({ key, name: nutrName, unit });
+      }
+    }
+    i++;
+  }
+  localStorage.setItem("ironlog_custom_nutrients_v1", JSON.stringify(customNutrients));
+
+  const entry = {
+    name, grams: 1,
+    calories: 0, protein: 0, carbs: 0, fat: 0,
+    micros, source: "supplement",
+  };
+  addFoodEntry(entry);
+
+  // Save to My Foods if checked
+  if (document.getElementById("suppSaveMyFoods").checked) {
+    const existing = myFoods.findIndex(f => f.name === name);
+    const myFood = { name, per100g: { calories: 0, protein: 0, carbs: 0, fat: 0, micros } };
+    if (existing >= 0) myFoods[existing] = myFood;
+    else myFoods.push(myFood);
+    saveMyFoods(myFoods);
+  }
 });
 
 // --- My Foods ---

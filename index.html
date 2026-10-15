@@ -34,6 +34,9 @@
         <span class="brand-name">IRON LOG</span>
         <span class="brand-sub" id="phaseLabel">Week 1 · Strength</span>
       </div>
+      <button class="theme-btn" id="themeToggle" aria-label="Toggle light/dark mode">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
       <button class="gear-btn" id="gearBtn" aria-label="Sync settings">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
@@ -292,6 +295,7 @@
       <div id="dietStatusPanel"></div>
 
       <div id="mealSections"></div>
+      <div id="pillChecklist"></div>
 
       <div class="section-label">Micronutrients today</div>
       <div class="panel micro-panel" id="microPanel"></div>
@@ -355,12 +359,14 @@
         <button class="food-mode-btn" data-mode="barcode">Barcode</button>
         <button class="food-mode-btn" data-mode="photo">Photo label</button>
         <button class="food-mode-btn" data-mode="myfoods">My Foods</button>
+        <button class="food-mode-btn" data-mode="supplement">Supplement</button>
         <button class="food-mode-btn" data-mode="manual">Manual</button>
       </div>
 
       <div class="food-mode-panel active" id="mode-search">
         <input type="text" id="foodSearchInput" placeholder="Search a food, e.g. chicken breast">
         <button class="save-btn" id="foodSearchBtn">Search</button>
+        <div id="recentFoodsSection" class="recent-foods-section"></div>
         <div id="foodSearchResults" class="food-results"></div>
       </div>
 
@@ -392,6 +398,23 @@
 
       <div class="food-mode-panel" id="mode-myfoods">
         <div id="myFoodsList" class="food-results"></div>
+      </div>
+
+      <div class="food-mode-panel" id="mode-supplement">
+        <label class="field-label">Take a photo of the supplement label</label>
+        <input type="file" id="suppLabelInput" accept="image/*" capture="environment">
+        <div id="suppOcrStatus" class="chart-empty-note"></div>
+        <div id="suppOcrForm" style="display:none;">
+          <label class="field-label">Supplement name</label>
+          <input type="text" id="suppName" placeholder="e.g. Omega-3 Fish Oil">
+          <label class="field-label">Serving size on label</label>
+          <input type="text" id="suppServing" placeholder="e.g. 1 softgel, 2 tablets" value="1 serving">
+          <div id="suppMicroFields"></div>
+          <label class="field-label" style="margin-top:8px;">
+            <input type="checkbox" id="suppSaveMyFoods" checked> Save to My Foods
+          </label>
+          <button class="save-btn" id="suppAddBtn">Add supplement</button>
+        </div>
       </div>
 
       <div class="food-mode-panel" id="mode-manual">
@@ -453,5 +476,10 @@
 <script src="food.js"></script>
 <script src="diet-adjuster.js"></script>
 <script src="body-comp.js"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+</script>
 </body>
 </html>

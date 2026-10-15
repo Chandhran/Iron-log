@@ -1,3 +1,19 @@
+// ---------- THEME TOGGLE ----------
+(function() {
+  const saved = localStorage.getItem("ironlog_theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+})();
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("themeToggle");
+  if (btn) btn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = current === "light" ? "dark" : "light";
+    if (next === "dark") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("ironlog_theme", next);
+  });
+});
+
 // ---------- STORAGE ----------
 const SESSIONS_KEY = "ironlog_sessions_v1";
 const STATE_KEY = "ironlog_state_v1";

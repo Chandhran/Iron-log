@@ -24,6 +24,28 @@
   font-size:16px;
 }
 
+/* ---- Light theme ---- */
+[data-theme="light"] {
+  --bg:#F5F3EF;
+  --bg-raised:#FFFFFF;
+  --bg-card:#FFFFFF;
+  --line:#DDD9D2;
+  --chalk:#1A1A1A;
+  --chalk-dim:#6B6860;
+  --steel:#8B9098;
+  --rust:#B5461B;
+  --rust-bright:#C4501A;
+  --success:#4A7A55;
+  --accent-cyan:#1ABFB0;
+  --accent-blue:#3580DD;
+  --accent-gold:#E0A820;
+  --accent-magenta:#C84890;
+  --accent-purple:#9850C0;
+  --accent-green:#3AAF55;
+  --accent-orange:#E05A3A;
+  --accent-red:#E04A4A;
+}
+
 .glow{
   filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 9px currentColor);
 }
@@ -56,7 +78,7 @@ body{
   padding:16px 16px 0 16px;
   position:sticky;
   top:0;
-  background:linear-gradient(180deg, var(--bg) 70%, rgba(20,20,20,0));
+  background:linear-gradient(180deg, var(--bg) 70%, transparent);
   z-index:10;
 }
 .brand{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
@@ -75,7 +97,7 @@ body{
   letter-spacing:0.04em;
   text-transform:uppercase;
 }
-.gear-btn{
+.gear-btn, .theme-btn{
   flex:0 0 auto;
   width:36px;height:36px;
   border-radius:10px;
@@ -85,7 +107,9 @@ body{
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;
 }
-.gear-btn:active{color:var(--chalk);border-color:var(--chalk-dim);}
+.gear-btn:active, .theme-btn:active{color:var(--chalk);border-color:var(--chalk-dim);}
+[data-theme="light"] .theme-btn svg { display:none; }
+[data-theme="light"] .theme-btn::after { content:"☾"; font-size:1.1rem; }
 
 .tabs{display:flex;gap:4px;background:var(--bg-raised);border-radius:10px;padding:4px;}
 .tab-btn{
@@ -1237,19 +1261,69 @@ select{
 
 /* ---- Achieved micronutrient goal (row turns green when intake ≥ RDA) ---- */
 .micro-row-met {
-  background: rgba(74, 207, 107, 0.08);
-  border: 1px solid rgba(74, 207, 107, 0.35);
+  background: rgba(0, 210, 211, 0.08);
+  border: 1px solid rgba(0, 210, 211, 0.35);
   border-radius: 6px;
   padding: 6px 8px;
   margin: 4px 0;
 }
 .micro-row-met .micro-name {
-  color: #4ACF6B;
+  color: #00D2D3;
   font-weight: 600;
 }
 .micro-row-met .micro-amount {
-  color: #4ACF6B;
+  color: #00D2D3;
 }
+
+/* ---- Recently used foods ---- */
+.recent-foods-section { margin-top: 10px; }
+.recent-foods-label {
+  font-size: 0.78rem;
+  color: var(--chalk-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.recent-food-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.recent-food-card:active { background: var(--bg-card); border-color: var(--chalk-dim); }
+.recent-food-name { color: var(--chalk); font-weight: 600; font-size: 0.92rem; }
+.recent-food-meta { color: var(--chalk-dim); font-size: 0.78rem; margin-top: 2px; }
+
+/* ---- Pill checklist ---- */
+.pill-section { margin-top: 4px; }
+.pill-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.pill-row:last-of-type { border-bottom: none; }
+.pill-check { width: 18px; height: 18px; accent-color: #00D2D3; }
+.pill-name { color: var(--chalk); font-weight: 500; flex: 1; }
+.pill-dose { color: var(--chalk-dim); font-size: 0.82rem; }
+
+/* ---- Uncommon micronutrient toggle ---- */
+.micro-rare-toggle {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--chalk-dim);
+  padding: 8px;
+  border-radius: 6px;
+  margin: 8px 0 4px 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.micro-rare-toggle:active { background: var(--bg-raised); }
+.micro-rare-section.hidden { display: none; }
 
 /* ---- Body composition panel (Progress tab) ---- */
 .section-with-action {
