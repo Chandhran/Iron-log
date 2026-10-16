@@ -1,5 +1,5 @@
 // Service Worker — offline caching for Iron Log
-const CACHE_NAME = "ironlog-v2";
+const CACHE_NAME = "ironlog-v3";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -69,8 +69,9 @@ self.addEventListener("fetch", (e) => {
   if (url.hostname === "world.openfoodfacts.org") return;
   if (url.hostname === "api.github.com") return;
 
-  // Network-first for app HTML (so updates land quickly), cache-first for everything else
-  if (e.request.mode === "navigate") {
+  // Network-first for app files (HTML, JS, CSS) so updates land quickly
+  const isAppFile = e.request.mode === "navigate" || url.origin === self.location.origin;
+  if (isAppFile) {
     e.respondWith(
       fetch(e.request)
         .then((res) => {
@@ -83,13 +84,12 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Cache-first for all other assets
+  // Cache-first for CDN assets (fonts, libraries)
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) return cached;
       return fetch(e.request).then((res) => {
-        // Cache new font files and CDN resources as they're fetched
-        if (res.ok && (url.hostname.includes("googleapis") || url.hostname.includes("gstatic") || url.hostname.includes("cdnjs") || url.hostname.includes("jsdelivr") || url.hostname.includes("unpkg"))) {
+        if (res.ok) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
         }
