@@ -17,6 +17,12 @@ function renderHomeTab() {
     <div class="home-actions">
       <button class="build-new-btn" id="homeBuildNewBtn">Build a new routine</button>
     </div>
+    <footer class="built-by-footer">
+      <div class="built-by-line"></div>
+      <span class="built-by-text">BUILT BY</span>
+      <div class="built-by-line"></div>
+      <div class="built-by-name">Chandhra</div>
+    </footer>
   `;
   renderDashboard("dashboard-home");
   document.getElementById("homeBuildNewBtn").addEventListener("click", handleBuildNewRoutineTap);
@@ -56,7 +62,7 @@ function renderWelcomeScreen(container) {
     </div>
 
     <div class="welcome-hero">
-      <div class="welcome-hero-title">Welcome to Iron Log</div>
+      <div class="welcome-hero-title">Welcome to LogIt</div>
       <div class="welcome-hero-sub">
         Answer a handful of questions and we'll generate a training program
         tailored to your goals, schedule, equipment, and body.
@@ -66,6 +72,12 @@ function renderWelcomeScreen(container) {
     <div class="home-actions">
       <button class="build-new-btn primary" id="welcomeBuildBtn">Click here to build your workout routine</button>
     </div>
+    <footer class="built-by-footer">
+      <div class="built-by-line"></div>
+      <span class="built-by-text">BUILT BY</span>
+      <div class="built-by-line"></div>
+      <div class="built-by-name">Chandhra</div>
+    </footer>
   `;
 
   startClock("welcome");

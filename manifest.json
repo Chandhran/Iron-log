@@ -1,6 +1,6 @@
 {
-  "name": "Iron Log — 16 Week Program",
-  "short_name": "Iron Log",
+  "name": "LogIt — Fitness & Health Tracker",
+  "short_name": "LogIt",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#141414",

@@ -1861,3 +1861,52 @@ html, body {
 #app {
   overflow-x: hidden;
 }
+
+/* Built By Chandhra footer */
+.built-by-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 48px 20px 32px;
+  margin-top: 24px;
+}
+.built-by-line {
+  width: 60px;
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+}
+.built-by-text {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.35);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.built-by-text::before,
+.built-by-text::after {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+}
+.built-by-name {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 1.4rem;
+  color: #D4551F;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+.built-by-footer .built-by-line {
+  display: none; /* using pseudo-elements on .built-by-text instead */
+}
+@media (max-width: 400px) {
+  .built-by-footer { padding: 36px 16px 24px; }
+  .built-by-name { font-size: 1.2rem; }
+  .built-by-text::before,
+  .built-by-text::after { width: 30px; }
+}
