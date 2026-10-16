@@ -949,7 +949,7 @@ function openPillSetup() {
     overlay = document.createElement("div");
     overlay.id = "pillSetupOverlay";
     overlay.className = "modal-overlay";
-    overlay.innerHTML = `<div class="modal-box"><div class="modal-body" id="pillSetupBody"></div></div>`;
+    overlay.innerHTML = `<div class="modal-sheet"><div class="modal-body" id="pillSetupBody"></div></div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("open"); });
   }

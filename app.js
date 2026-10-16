@@ -357,54 +357,54 @@ function computeStreak() {
   return streak;
 }
 
-function computeHeatmap(monthsBack) {
+function computeHeatmap() {
   const loggedDates = new Set(sessions.map(s => s.date));
   const now = new Date();
+  const curYear = now.getFullYear(), curMonth = now.getMonth();
 
-  // Auto-grow mode: start from earliest of first logged session or program
-  // creation date; falls back to 3 months back if neither exists.
-  if (monthsBack == null) {
-    let earliest = null;
-    if (sessions.length > 0) {
-      const dates = sessions.map(s => s.date).filter(Boolean).sort();
-      if (dates[0]) earliest = parseISO(dates[0]);
+  // Determine how far back to go
+  let monthsBack = 9; // default: 9 months back (+ current + 2 future = 12 total)
+  let earliest = null;
+  if (sessions.length > 0) {
+    const dates = sessions.map(s => s.date).filter(Boolean).sort();
+    if (dates[0]) earliest = parseISO(dates[0]);
+  }
+  try {
+    const cfg = (typeof loadConfig === "function") ? loadConfig() : null;
+    if (cfg && cfg.created_at) {
+      const c = new Date(cfg.created_at);
+      if (!earliest || c < earliest) earliest = c;
     }
-    try {
-      const cfg = (typeof loadConfig === "function") ? loadConfig() : null;
-      if (cfg && cfg.created_at) {
-        const c = new Date(cfg.created_at);
-        if (!earliest || c < earliest) earliest = c;
-      }
-    } catch (e) {}
-    if (!earliest) {
-      monthsBack = 3;
-    } else {
-      monthsBack = (now.getFullYear() - earliest.getFullYear()) * 12
-                 + (now.getMonth() - earliest.getMonth()) + 1;
-      if (monthsBack < 3) monthsBack = 3;
-    }
+  } catch (e) {}
+  if (earliest) {
+    const dataBack = (curYear - earliest.getFullYear()) * 12 + (curMonth - earliest.getMonth());
+    if (dataBack > monthsBack) monthsBack = dataBack;
   }
 
+  // Future months: 2 by default, 6 if user has data
+  const monthsAhead = earliest ? 6 : 2;
+  const totalSpan = monthsBack + 1 + monthsAhead; // past + current + future
+  const useYearLabel = totalSpan > 12;
+
   const months = [];
-  for (let i = monthsBack - 1; i >= 0; i--) {
-    const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    // Include the year in labels once we go back past 12 months so Jan 2025
-    // and Jan 2026 don't both just say "Jan".
-    const label = monthsBack > 12
+  for (let i = -monthsBack; i <= monthsAhead; i++) {
+    const monthDate = new Date(curYear, curMonth + i, 1);
+    const label = useYearLabel
       ? monthDate.toLocaleDateString(undefined, { month: "short", year: "2-digit" })
       : monthDate.toLocaleDateString(undefined, { month: "short" });
     const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-    const isCurrentMonth = (i === 0);
-    const lastDay = isCurrentMonth ? now.getDate() : daysInMonth;
+    const isCurrent = (i === 0);
+    const isFutureMonth = (i > 0);
+    const lastDay = isCurrent ? now.getDate() : (isFutureMonth ? 0 : daysInMonth);
     const days = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dt = new Date(monthDate.getFullYear(), monthDate.getMonth(), d);
       const iso = dt.toISOString().slice(0, 10);
       days.push({ logged: loggedDates.has(iso), future: d > lastDay });
     }
-    months.push({ label, days });
+    months.push({ label, days, isCurrent });
   }
-  return months;
+  return { months, currentIndex: monthsBack };
 }
 
 // ---------- DASHBOARD RENDER (mounted in both Train and Progress) ----------
@@ -419,7 +419,7 @@ function renderDashboard(targetId) {
   const thisWeek = computeWeekStats(monday);
   const lastWeek = computeWeekStats(prevMonday);
   const streak = computeStreak();
-  const heatmap = computeHeatmap();
+  const heatmapData = computeHeatmap();
   if (!trainedAreasWeekMode[targetId]) trainedAreasWeekMode[targetId] = "this";
 
   const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
@@ -458,8 +458,8 @@ function renderDashboard(targetId) {
       </div>`;
   }).join("");
 
-  const heatmapHtml = heatmap.map(month => `
-    <div class="heat-month">
+  const heatmapHtml = heatmapData.months.map((month, idx) => `
+    <div class="heat-month${month.isCurrent ? " heat-month-current" : ""}" ${idx === heatmapData.currentIndex ? 'id="heatCurrent-' + targetId + '"' : ''}>
       <div class="heat-month-label">${month.label}</div>
       <div class="heat-grid">
         ${month.days.map(d => `<span class="heat-dot ${d.logged ? "logged" : ""} ${d.future ? "future" : ""}"></span>`).join("")}
@@ -519,6 +519,13 @@ function renderDashboard(targetId) {
       <div class="heat-row">${heatmapHtml}</div>
     </div>
   `;
+
+  // Scroll training calendar so current month is at the left edge
+  const heatCur = document.getElementById("heatCurrent-" + targetId);
+  if (heatCur) {
+    const row = heatCur.closest(".heat-row");
+    if (row) row.scrollLeft = heatCur.offsetLeft - row.offsetLeft;
+  }
 
   el.querySelectorAll(".trained-toggle-btn").forEach(btn => {
     btn.addEventListener("click", () => {
