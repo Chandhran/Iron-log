@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'Tritopani';
+  src: url('Tritopani.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
 :root{
   --bg:#141414;
   --bg-raised:#1c1c1c;
@@ -1893,8 +1900,8 @@ html, body {
   background: rgba(255,255,255,0.2);
 }
 .built-by-name {
-  font-family: 'Dancing Script', cursive;
-  font-weight: 700;
+  font-family: 'Tritopani', cursive;
+  font-weight: normal;
   font-size: 1.8rem;
   color: #D4941F;
   letter-spacing: 0.01em;

@@ -1,5 +1,5 @@
 // Service Worker — offline caching for Iron Log
-const CACHE_NAME = "ironlog-v8";
+const CACHE_NAME = "ironlog-v9";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -28,11 +28,12 @@ const APP_FILES = [
   "./favicon-16.png",
   "./favicon-32.png",
   "./ifct-foods.json",
+  "./Tritopani.otf",
 ];
 const CDN_FILES = [
   "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js",
   "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
-  "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Manrope:wght@400;500;600;700;800&display=swap",
+  "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap",
 ];
 
 self.addEventListener("install", (e) => {
