@@ -1867,46 +1867,47 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 48px 20px 32px;
   margin-top: 24px;
 }
 .built-by-line {
-  width: 60px;
-  height: 1px;
-  background: rgba(255,255,255,0.15);
+  display: none;
 }
 .built-by-text {
   font-family: 'Manrope', sans-serif;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.25em;
-  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 .built-by-text::before,
 .built-by-text::after {
   content: '';
-  width: 40px;
+  width: 48px;
   height: 1px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.2);
 }
 .built-by-name {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  font-style: italic;
-  font-size: 1.4rem;
-  color: #D4551F;
-  letter-spacing: 0.02em;
-  margin-top: 2px;
-}
-.built-by-footer .built-by-line {
-  display: none; /* using pseudo-elements on .built-by-text instead */
+  font-family: 'Dancing Script', cursive;
+  font-weight: 700;
+  font-size: 1.8rem;
+  color: #D4941F;
+  letter-spacing: 0.01em;
+  margin-top: 0;
 }
 @media (max-width: 400px) {
   .built-by-footer { padding: 36px 16px 24px; }
-  .built-by-name { font-size: 1.2rem; }
+  .built-by-name { font-size: 1.5rem; }
   .built-by-text::before,
-  .built-by-text::after { width: 30px; }
+  .built-by-text::after { width: 32px; }
+}
+@media (max-width: 340px) {
+  .built-by-name { font-size: 1.3rem; }
+  .built-by-text::before,
+  .built-by-text::after { width: 24px; }
 }
