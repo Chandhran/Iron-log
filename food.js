@@ -951,10 +951,10 @@ function openPillSetup() {
     overlay.className = "modal-overlay";
     overlay.innerHTML = `<div class="modal-box"><div class="modal-body" id="pillSetupBody"></div></div>`;
     document.body.appendChild(overlay);
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("active"); });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("open"); });
   }
   document.getElementById("pillSetupBody").innerHTML = html;
-  overlay.classList.add("active");
+  overlay.classList.add("open");
 
   document.getElementById("pillSetupAddRow").addEventListener("click", () => {
     const row = document.createElement("div");
@@ -981,7 +981,7 @@ function openPillSetup() {
       if (name) newList.push({ name, dose: doses[i] ? doses[i].value.trim() : "" });
     });
     savePillsList(newList);
-    overlay.classList.remove("active");
+    overlay.classList.remove("open");
     renderPillChecklist(currentFoodDate);
   });
 }
