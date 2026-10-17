@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.chandhran.twa",
+      "sha256_cert_fingerprints": [
+        "20:62:3B:AB:E1:33:53:B7:D7:FD:3F:BE:D3:D1:67:55:8B:8B:8E:00:85:6A:93:67:7F:D8:F0:FF:B4:78:95:BF"
+      ]
+    }
+  }
+]
