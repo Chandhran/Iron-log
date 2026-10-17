@@ -1892,12 +1892,19 @@ html, body {
   align-items: center;
   gap: 14px;
 }
+[data-theme="light"] .built-by-text {
+  color: rgba(0,0,0,0.4);
+}
 .built-by-text::before,
 .built-by-text::after {
   content: '';
   width: 48px;
   height: 1px;
   background: rgba(255,255,255,0.2);
+}
+[data-theme="light"] .built-by-text::before,
+[data-theme="light"] .built-by-text::after {
+  background: rgba(0,0,0,0.2);
 }
 .built-by-name {
   font-family: 'Tritopani', cursive;
