@@ -465,25 +465,29 @@ function prepareExercise(ex, segment, focus, userCtx) {
     const setsLower = setsMatch ? parseInt(setsMatch[1]) : 3;
     const sets = Math.round((setsLower + setsUpper) / 2);
 
-    // Override reps when the prescription context doesn't match the current
-    // training focus — most pool exercises only carry one prescription so
-    // strength and hypertrophy weeks would otherwise show identical rep ranges.
-    const strengthContexts = ["powerbuilding_primary"];
-    const hyperContexts    = ["hypertrophy_bodypart","powerbuilding_isolation"];
-    let finalReps = rx.reps;
-    let finalRpe  = rx.rpe;
-    let finalRest = restMin;
+    // Pool prescriptions are mega-ranges across all program weeks (e.g. "1-12")
+    // so they can't differentiate strength vs hypertrophy. Always apply concrete
+    // rep targets based on segment + focus, keeping pool data for exercise info
+    // and technique cues only.
+    let finalReps, finalRpe, finalRest;
+    const isCompound = ex.compound;
 
-    if (isStrength && !strengthContexts.includes(rx.context)) {
-      // Pull reps down for a strength week
-      if (segment === "main")           { finalReps = "3–5";  finalRpe = 8;   finalRest = 4.0; }
-      else if (segment === "secondary") { finalReps = "5–8";  finalRpe = 8;   finalRest = 3.0; }
-      else if (segment === "isolation") { finalReps = "8–12"; finalRpe = 8;   finalRest = 2.0; }
-    } else if (!isStrength && strengthContexts.includes(rx.context)) {
-      // Push reps up for a hypertrophy week
-      if (segment === "main")           { finalReps = "6–8";  finalRpe = 8;   finalRest = 3.0; }
-      else if (segment === "secondary") { finalReps = "8–12"; finalRpe = 8;   finalRest = 2.0; }
-      else if (segment === "isolation") { finalReps = "10–15"; finalRpe = 9;  finalRest = 1.5; }
+    if (segment === "opener" || segment === "joint_prep") {
+      finalReps = "10–15"; finalRpe = 7; finalRest = 1.0;
+    } else if (segment === "main" && isStrength) {
+      finalReps = "3–5"; finalRpe = 8; finalRest = 4.0;
+    } else if (segment === "main") {
+      finalReps = "6–8"; finalRpe = 8; finalRest = 3.0;
+    } else if (segment === "secondary" && isStrength) {
+      finalReps = "5–8"; finalRpe = 8; finalRest = 3.0;
+    } else if (segment === "secondary") {
+      finalReps = "8–12"; finalRpe = 8; finalRest = 2.0;
+    } else if (segment === "isolation" && isStrength) {
+      finalReps = "8–12"; finalRpe = 8; finalRest = 2.0;
+    } else if (segment === "isolation") {
+      finalReps = "10–15"; finalRpe = 9; finalRest = 1.5;
+    } else {
+      finalReps = rx.reps; finalRpe = rx.rpe; finalRest = restMin;
     }
 
     return {
