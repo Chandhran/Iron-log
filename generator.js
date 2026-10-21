@@ -465,13 +465,34 @@ function prepareExercise(ex, segment, focus, userCtx) {
     const setsLower = setsMatch ? parseInt(setsMatch[1]) : 3;
     const sets = Math.round((setsLower + setsUpper) / 2);
 
+    // Override reps when the prescription context doesn't match the current
+    // training focus — most pool exercises only carry one prescription so
+    // strength and hypertrophy weeks would otherwise show identical rep ranges.
+    const strengthContexts = ["powerbuilding_primary"];
+    const hyperContexts    = ["hypertrophy_bodypart","powerbuilding_isolation"];
+    let finalReps = rx.reps;
+    let finalRpe  = rx.rpe;
+    let finalRest = restMin;
+
+    if (isStrength && !strengthContexts.includes(rx.context)) {
+      // Pull reps down for a strength week
+      if (segment === "main")           { finalReps = "3–5";  finalRpe = 8;   finalRest = 4.0; }
+      else if (segment === "secondary") { finalReps = "5–8";  finalRpe = 8;   finalRest = 3.0; }
+      else if (segment === "isolation") { finalReps = "8–12"; finalRpe = 8;   finalRest = 2.0; }
+    } else if (!isStrength && strengthContexts.includes(rx.context)) {
+      // Push reps up for a hypertrophy week
+      if (segment === "main")           { finalReps = "6–8";  finalRpe = 8;   finalRest = 3.0; }
+      else if (segment === "secondary") { finalReps = "8–12"; finalRpe = 8;   finalRest = 2.0; }
+      else if (segment === "isolation") { finalReps = "10–15"; finalRpe = 9;  finalRest = 1.5; }
+    }
+
     return {
       name: ex.name,
-      target: `${sets}×${rx.reps}${rx.rpe ? ` @ RPE ${rx.rpe}` : ""}`,
+      target: `${sets}×${finalReps}${finalRpe ? ` @ RPE ${finalRpe}` : ""}`,
       sets: sets,
-      reps: rx.reps,
-      rpe: rx.rpe,
-      rest_min: restMin,
+      reps: finalReps,
+      rpe: finalRpe,
+      rest_min: finalRest,
       muscle: ex.muscle,
       secondary: ex.secondary || [],
       pattern: ex.pattern,
