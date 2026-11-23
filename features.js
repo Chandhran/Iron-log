@@ -481,15 +481,124 @@ function addShareButton(container, session) {
 
 
 // =====================================================================
-// 5. DRAG-TO-REORDER DAYS within a week
+// 5. SWAP WORKOUTS between day slots
 // =====================================================================
-const DAY_ORDER_KEY = "ironlog_day_order_v1";
+// ---- Day Swap: swap workout content between two day slots ----
+// Keeps day names (Mon, Tue, etc.) fixed; moves workout title, type, exercises/tasks.
+const DAY_SWAPS_KEY = "ironlog_day_swaps_v1";
 
-function loadDayOrder() {
-  try { return JSON.parse(localStorage.getItem(DAY_ORDER_KEY)) || null; } catch { return null; }
+function loadDaySwaps() {
+  try { return JSON.parse(localStorage.getItem(DAY_SWAPS_KEY)) || {}; } catch (e) { return {}; }
 }
-function saveDayOrder(order) {
-  localStorage.setItem(DAY_ORDER_KEY, JSON.stringify(order));
+function saveDaySwaps(swaps) {
+  localStorage.setItem(DAY_SWAPS_KEY, JSON.stringify(swaps));
+}
+
+// Swap the workout content between two day slots in PROGRAM data.
+// Keeps .name fixed (the weekday label), moves everything else.
+function swapDayWorkouts(phaseKey, idxA, idxB) {
+  const phase = PROGRAM[phaseKey];
+  if (!phase || !phase.days) return;
+  const dayA = phase.days[idxA];
+  const dayB = phase.days[idxB];
+  // Fields to swap (everything except the day name)
+  const swapFields = ["title", "type", "exercises", "tasks", "target", "sets", "muscle", "secondary", "pattern", "compound"];
+  swapFields.forEach(f => {
+    const tmp = dayA[f];
+    dayA[f] = dayB[f];
+    dayB[f] = tmp;
+  });
+  // Persist modified program
+  if (typeof saveActiveProgram === "function") saveActiveProgram(PROGRAM);
+}
+
+// Per-week swap: store which indices were swapped for a specific week
+function applyPerWeekSwap(week, phaseKey, idxA, idxB) {
+  const swaps = loadDaySwaps();
+  const weekKey = week + "_" + phaseKey;
+  if (!swaps[weekKey]) swaps[weekKey] = {};
+  // If A was already swapped somewhere, follow the chain
+  const currentA = swaps[weekKey][idxA] !== undefined ? swaps[weekKey][idxA] : idxA;
+  const currentB = swaps[weekKey][idxB] !== undefined ? swaps[weekKey][idxB] : idxB;
+  swaps[weekKey][idxA] = currentB;
+  swaps[weekKey][idxB] = currentA;
+  saveDaySwaps(swaps);
+}
+
+// Resolve the actual day object for a slot, checking per-week swaps
+function resolveDay(week, phaseKey, slotIdx) {
+  const phase = PROGRAM[phaseKey];
+  if (!phase || !phase.days) return null;
+  const swaps = loadDaySwaps();
+  const weekKey = week + "_" + phaseKey;
+  const map = swaps[weekKey] || {};
+  const resolvedIdx = map[slotIdx] !== undefined ? map[slotIdx] : slotIdx;
+  return phase.days[resolvedIdx];
+}
+
+// Get the resolved index for a slot
+function resolveDayIndex(week, phaseKey, slotIdx) {
+  const swaps = loadDaySwaps();
+  const weekKey = week + "_" + phaseKey;
+  const map = swaps[weekKey] || {};
+  return map[slotIdx] !== undefined ? map[slotIdx] : slotIdx;
+}
+
+// Show swap confirmation modal
+function showSwapModal(srcIdx, tgtIdx) {
+  const phaseKey = getPhaseForWeek(state.week);
+  const phase = PROGRAM[phaseKey];
+  if (!phase || !phase.days) return;
+
+  const srcDay = phase.days[srcIdx];
+  const tgtDay = phase.days[tgtIdx];
+  const phaseLabel = phaseKey === "strength" ? "Strength" : (phaseKey === "hypertrophy" ? "Hypertrophy" : "");
+
+  // Remove existing modal if any
+  const old = document.getElementById("swapModal");
+  if (old) old.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "swapModal";
+  modal.className = "swap-modal-overlay";
+  modal.innerHTML = `
+    <div class="swap-modal">
+      <div class="swap-modal-title">Swap Workouts</div>
+      <div class="swap-modal-body">
+        Move <strong>${srcDay.title || srcDay.name}</strong> to <strong>${tgtDay.name}</strong>
+        and <strong>${tgtDay.title || tgtDay.name}</strong> to <strong>${srcDay.name}</strong>?
+      </div>
+      <div class="swap-modal-actions">
+        <button class="swap-btn swap-all" id="swapAllBtn">All ${phaseLabel} weeks</button>
+        <button class="swap-btn swap-once" id="swapOnceBtn">Just this week</button>
+        <button class="swap-btn swap-cancel" id="swapCancelBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById("swapAllBtn").addEventListener("click", () => {
+    swapDayWorkouts(phaseKey, srcIdx, tgtIdx);
+    modal.remove();
+    renderDayStrip();
+    showToast("Swapped for all " + phaseLabel + " weeks");
+  });
+
+  document.getElementById("swapOnceBtn").addEventListener("click", () => {
+    applyPerWeekSwap(state.week, phaseKey, srcIdx, tgtIdx);
+    modal.remove();
+    renderDayStrip();
+    showToast("Swapped for Week " + state.week + " only");
+  });
+
+  document.getElementById("swapCancelBtn").addEventListener("click", () => {
+    modal.remove();
+  });
+
+  // Close on overlay click
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.remove();
+  });
 }
 
 function enableDayReorder() {
@@ -497,10 +606,11 @@ function enableDayReorder() {
   if (!strip) return;
 
   let dragSrc = null;
-  const dayBtns = strip.querySelectorAll(".day-btn");
+  const dayBtns = strip.querySelectorAll(".day-btn:not([data-reorder-ready])");
 
   dayBtns.forEach(btn => {
     btn.setAttribute("draggable", "true");
+    btn.dataset.reorderReady = "1";
 
     btn.addEventListener("dragstart", (e) => {
       dragSrc = btn;
@@ -523,30 +633,28 @@ function enableDayReorder() {
       e.preventDefault();
       btn.classList.remove("drag-over");
       if (dragSrc && dragSrc !== btn) {
-        // Swap in DOM
-        const parent = btn.parentNode;
-        const srcIdx = [...parent.children].indexOf(dragSrc);
-        const tgtIdx = [...parent.children].indexOf(btn);
-        if (srcIdx < tgtIdx) parent.insertBefore(dragSrc, btn.nextSibling);
-        else parent.insertBefore(dragSrc, btn);
-        // Save order
-        const newOrder = [...parent.querySelectorAll(".day-btn")].map(b => parseInt(b.dataset.dayIdx));
-        saveDayOrder(newOrder);
-        showToast("Day order saved");
+        const srcIdx = parseInt(dragSrc.dataset.dayIdx);
+        const tgtIdx = parseInt(btn.dataset.dayIdx);
+        // Reset drag visual
+        dragSrc.classList.remove("dragging");
+        strip.querySelectorAll(".day-btn").forEach(b => b.classList.remove("drag-over"));
+        dragSrc = null;
+        // Show swap confirmation
+        showSwapModal(srcIdx, tgtIdx);
       }
     });
 
     btn.addEventListener("dragend", () => {
-      btn.classList.remove("dragging");
-      dayBtns.forEach(b => b.classList.remove("drag-over"));
+      if (dragSrc) dragSrc.classList.remove("dragging");
+      strip.querySelectorAll(".day-btn").forEach(b => b.classList.remove("drag-over"));
+      dragSrc = null;
     });
 
     // Touch support for mobile
-    let touchStartY = 0, touchStartX = 0, touchClone = null;
     btn.addEventListener("touchstart", (e) => {
       const touch = e.touches[0];
-      touchStartX = touch.clientX;
-      touchStartY = touch.clientY;
+      btn._touchStartX = touch.clientX;
+      btn._touchStartY = touch.clientY;
       btn._longPress = setTimeout(() => {
         dragSrc = btn;
         btn.classList.add("dragging");
@@ -571,19 +679,16 @@ function enableDayReorder() {
       if (!dragSrc) return;
       const touch = e.changedTouches[0];
       const target = document.elementFromPoint(touch.clientX, touch.clientY);
-      if (target && target.classList.contains("day-btn") && target !== dragSrc) {
-        const parent = strip;
-        const srcIdx = [...parent.querySelectorAll(".day-btn")].indexOf(dragSrc);
-        const tgtIdx = [...parent.querySelectorAll(".day-btn")].indexOf(target);
-        if (srcIdx < tgtIdx) parent.insertBefore(dragSrc, target.nextSibling);
-        else parent.insertBefore(dragSrc, target);
-        const newOrder = [...parent.querySelectorAll(".day-btn")].map(b => parseInt(b.dataset.dayIdx));
-        saveDayOrder(newOrder);
-        showToast("Day order saved");
-      }
       dragSrc.classList.remove("dragging");
       strip.querySelectorAll(".day-btn").forEach(b => b.classList.remove("drag-over"));
-      dragSrc = null;
+      if (target && target.classList.contains("day-btn") && target !== dragSrc) {
+        const srcIdx = parseInt(dragSrc.dataset.dayIdx);
+        const tgtIdx = parseInt(target.dataset.dayIdx);
+        dragSrc = null;
+        showSwapModal(srcIdx, tgtIdx);
+      } else {
+        dragSrc = null;
+      }
     });
   });
 }
@@ -766,11 +871,13 @@ function patchTrainShareButton() {
   if (typeof PROGRAM === "undefined" || !PROGRAM) return;
   const phaseKeys = Object.keys(PROGRAM).filter(k => !k.startsWith("_"));
   if (!phaseKeys.length) return;
-  const phase = PROGRAM[phaseKeys[Math.min(Math.floor((state.week - 1) / (PROGRAM._duration_weeks ? Math.ceil(PROGRAM._duration_weeks / phaseKeys.length) : 4)), phaseKeys.length - 1)]];
+  const _pk2 = getPhaseForWeek(state.week);
+  const phase = PROGRAM[_pk2];
   if (!phase?.days) return;
-  const day = phase.days[state.dayIndex];
+  const day = (typeof resolveDay === "function") ? resolveDay(state.week, _pk2, state.dayIndex) : phase.days[state.dayIndex];
   if (!day || day.type !== "training") return;
-  const existing = sessions.find(s => s.week === state.week && s.day === day.name);
+  const slotName = phase.days[state.dayIndex].name;
+  const existing = sessions.find(s => s.week === state.week && s.day === slotName);
   if (existing && !existing.rest && existing.exercises?.length) {
     addShareButton(parent, existing);
   }
@@ -783,7 +890,6 @@ function initFeatures() {
   if (dayContent) {
     const observer = new MutationObserver(() => {
       patchExerciseCards();
-      enableDayReorder();
     });
     observer.observe(dayContent, { childList: true, subtree: false });
     // Initial patch

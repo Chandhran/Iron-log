@@ -604,11 +604,15 @@ function renderDayStrip() {
   const phase = PROGRAM[getPhaseForWeek(state.week)];
   if (!phase || !phase.days) { strip.innerHTML = ""; renderDayContent(); return; }
   strip.innerHTML = "";
+  const _phaseKey = getPhaseForWeek(state.week);
   phase.days.forEach((day, i) => {
+    // Resolve per-week swap if any
+    const resolved = (typeof resolveDay === "function") ? resolveDay(state.week, _phaseKey, i) : day;
     const btn = document.createElement("button");
-    btn.className = "day-btn" + (day.type === "rest" ? " rest-day" : "");
+    btn.className = "day-btn" + ((resolved.type || day.type) === "rest" ? " rest-day" : "");
     if (i === state.dayIndex) btn.classList.add("active");
     btn.textContent = day.name.slice(0, 3);
+    btn.dataset.dayIdx = i;
     btn.addEventListener("click", () => {
       state.dayIndex = i;
       saveState(state);
@@ -662,12 +666,17 @@ function renderDayContent() {
       </div>`;
     return;
   }
-  const phase = PROGRAM[getPhaseForWeek(state.week)];
+  const _pk = getPhaseForWeek(state.week);
+  const phase = PROGRAM[_pk];
   if (!phase || !phase.days || !phase.days[state.dayIndex]) {
     container.innerHTML = `<div class="exercise-card"><div class="task-note">This day is not defined in your program.</div></div>`;
     return;
   }
-  const day = phase.days[state.dayIndex];
+  const slotDay = phase.days[state.dayIndex]; // The slot (keeps day name like "Tuesday")
+  // Resolve per-week swap: get the workout that should appear in this slot
+  const resolvedDay = (typeof resolveDay === "function") ? resolveDay(state.week, _pk, state.dayIndex) : slotDay;
+  // Merge: slot's name + workout's content — reassign to `day` so rest of function works unchanged
+  const day = Object.assign({}, resolvedDay, { name: slotDay.name });
   container.innerHTML = "";
 
   const existing = findSession(state.week, day.name);
