@@ -8,23 +8,20 @@ const REST_TIMER_KEY = "ironlog_rest_timer_v1";
 
 const RestTimer = (() => {
   let timerId = null;
-  let remaining = 0;      // seconds left
-  let total = 0;           // total seconds for this rest
-  let onTick = null;
-  let activeEl = null;     // DOM element currently showing the timer
+  let remaining = 0;
+  let total = 0;
+  let overlay = null;
+  let exerciseName = "";
+  let nextSetInfo = "";
 
-  // --- Alarm sound via Web Audio API ---
   function playAlarm() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      // Three ascending beeps
       [0, 200, 400].forEach((delay, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "square";
-        osc.frequency.value = 880 + i * 220;
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = "square"; osc.frequency.value = 880 + i * 220;
         gain.gain.value = 0.15;
         osc.start(ctx.currentTime + delay / 1000);
         osc.stop(ctx.currentTime + delay / 1000 + 0.15);
@@ -32,20 +29,16 @@ const RestTimer = (() => {
     } catch (e) {}
   }
 
-  // --- Vibration ---
   function vibrate() {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
   }
 
-  // --- Background notification ---
   function notifyDone() {
     if ("Notification" in window && Notification.permission === "granted") {
       try {
         new Notification("LogIt — Rest Over", {
           body: "Time to start your next set!",
-          icon: "icon-192.png",
-          tag: "rest-timer",
-          requireInteraction: false
+          icon: "icon-192.png", tag: "rest-timer", requireInteraction: false
         });
       } catch (e) {}
     }
@@ -63,45 +56,88 @@ const RestTimer = (() => {
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
+  function ensureOverlay() {
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.className = "rest-overlay";
+    overlay.innerHTML = `
+      <div class="rest-card">
+        <div class="rest-card-highlight"></div>
+        <div class="rest-header">
+          <span class="rest-badge">REST</span>
+          <span class="rest-ex-name"></span>
+        </div>
+        <div class="rest-ring-wrap">
+          <div class="rest-ring-glow"></div>
+          <svg class="rest-ring-svg" viewBox="0 0 220 220">
+            <defs>
+              <linearGradient id="restGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#D4551F"/>
+                <stop offset="100%" stop-color="#e8773a"/>
+              </linearGradient>
+            </defs>
+            <circle class="rest-ring-bg" cx="110" cy="110" r="100"/>
+            <circle class="rest-ring-progress" cx="110" cy="110" r="100"/>
+          </svg>
+          <div class="rest-ring-time"></div>
+        </div>
+        <button class="rest-skip-btn">
+          Skip rest
+          <span class="rest-skip-arrow">→</span>
+        </button>
+      </div>
+      <div class="rest-next-card">
+        <div class="rest-next-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D4551F" stroke-width="2.2">
+            <path d="M4 12h2m12 0h2M6 12a2 2 0 012-2h0a2 2 0 012 2v0a2 2 0 01-2 2h0a2 2 0 01-2-2zM14 12a2 2 0 012-2h0a2 2 0 012 2v0a2 2 0 01-2 2h0a2 2 0 01-2-2zM12 10v4"/>
+          </svg>
+        </div>
+        <div class="rest-next-info">
+          <div class="rest-next-label">NEXT SET</div>
+          <div class="rest-next-name"></div>
+          <div class="rest-next-detail"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector(".rest-skip-btn").addEventListener("click", stop);
+    return overlay;
+  }
+
+  const CIRC = 2 * Math.PI * 100; // circumference r=100
+
   function stop() {
     if (timerId) { clearInterval(timerId); timerId = null; }
     remaining = 0;
-    if (activeEl) {
-      activeEl.classList.remove("rest-timer-active", "rest-timer-done");
-      activeEl.innerHTML = activeEl._originalHtml || "";
-      activeEl = null;
-    }
+    if (overlay) { overlay.classList.remove("open"); }
   }
 
-  function start(seconds, el) {
-    stop(); // kill any running timer
+  function start(seconds, exName, nextInfo) {
+    stop();
     total = seconds;
     remaining = seconds;
-    activeEl = el;
-    activeEl._originalHtml = el.innerHTML;
-    activeEl.classList.add("rest-timer-active");
+    exerciseName = exName || "";
+    nextSetInfo = nextInfo || "";
     requestNotificationPermission();
+
+    const ov = ensureOverlay();
+    ov.querySelector(".rest-ex-name").textContent = exerciseName;
+    ov.querySelector(".rest-next-name").textContent = exerciseName;
+    ov.querySelector(".rest-next-detail").textContent = nextSetInfo;
+    ov.classList.add("open");
 
     updateDisplay();
     timerId = setInterval(() => {
       remaining--;
       if (remaining <= 0) {
-        clearInterval(timerId);
-        timerId = null;
-        remaining = 0;
-        playAlarm();
-        vibrate();
-        notifyDone();
-        activeEl.classList.remove("rest-timer-active");
-        activeEl.classList.add("rest-timer-done");
-        activeEl.innerHTML = `<span class="rest-done-text">REST DONE — GO!</span>`;
+        clearInterval(timerId); timerId = null; remaining = 0;
+        playAlarm(); vibrate(); notifyDone();
+        // Show done state briefly
+        ov.querySelector(".rest-ring-time").textContent = "DONE";
+        ov.querySelector(".rest-ring-time").classList.add("rest-done");
         setTimeout(() => {
-          if (activeEl && activeEl.classList.contains("rest-timer-done")) {
-            activeEl.classList.remove("rest-timer-done");
-            activeEl.innerHTML = activeEl._originalHtml || "";
-            activeEl = null;
-          }
-        }, 5000);
+          ov.classList.remove("open");
+          ov.querySelector(".rest-ring-time").classList.remove("rest-done");
+        }, 3000);
         return;
       }
       updateDisplay();
@@ -109,23 +145,13 @@ const RestTimer = (() => {
   }
 
   function updateDisplay() {
-    if (!activeEl) return;
-    const pct = ((total - remaining) / total) * 100;
-    activeEl.innerHTML = `
-      <div class="rest-timer-display">
-        <div class="rest-timer-ring">
-          <svg viewBox="0 0 44 44" class="rest-ring-svg">
-            <circle cx="22" cy="22" r="18" fill="none" stroke="var(--surface-2)" stroke-width="3"/>
-            <circle cx="22" cy="22" r="18" fill="none" stroke="var(--accent-orange)" stroke-width="3"
-              stroke-dasharray="${2 * Math.PI * 18}" stroke-dashoffset="${2 * Math.PI * 18 * (1 - pct / 100)}"
-              stroke-linecap="round" transform="rotate(-90 22 22)"/>
-          </svg>
-          <span class="rest-timer-time">${formatTime(remaining)}</span>
-        </div>
-        <button class="rest-timer-skip" title="Skip rest">✕</button>
-      </div>`;
-    const skipBtn = activeEl.querySelector(".rest-timer-skip");
-    if (skipBtn) skipBtn.addEventListener("click", (e) => { e.stopPropagation(); stop(); });
+    if (!overlay) return;
+    const pct = remaining / total;
+    const offset = CIRC * pct;
+    const progress = overlay.querySelector(".rest-ring-progress");
+    progress.setAttribute("stroke-dasharray", CIRC);
+    progress.setAttribute("stroke-dashoffset", CIRC - offset);
+    overlay.querySelector(".rest-ring-time").textContent = formatTime(remaining);
   }
 
   function addRestButton(container, restMinutes, exIdx, setIdx) {
@@ -136,9 +162,15 @@ const RestTimer = (() => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const secs = Math.round(restMinutes * 60);
-      // Use the set row itself as the timer container
+      // Get exercise name from card
+      const card = btn.closest(".exercise-card");
+      const name = card ? (card.querySelector(".exercise-name")?.textContent || "") : "";
+      // Get set info
       const row = btn.closest(".set-row");
-      if (row) start(secs, row);
+      const setNum = row ? row.querySelector(".set-num")?.textContent : "";
+      const totalSets = card ? card.querySelectorAll(".set-row").length : "";
+      const detail = setNum && totalSets ? `Set ${setNum} of ${totalSets}` : "";
+      start(secs, name, detail);
     });
     container.appendChild(btn);
   }
@@ -305,125 +337,167 @@ function generateShareCard(session) {
   return new Promise((resolve) => {
     const canvas = document.createElement("canvas");
     const W = 1080, H = 1920;
-    canvas.width = W;
-    canvas.height = H;
+    canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
+    const PAD = 84;
 
-    // Background gradient
+    // ---- Background: dark top to warm orange bottom ----
     const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, "#0f0f0f");
-    bg.addColorStop(0.5, "#1a1208");
-    bg.addColorStop(1, "#0f0f0f");
+    bg.addColorStop(0, "#0a0a0a");
+    bg.addColorStop(0.4, "#0f0a06");
+    bg.addColorStop(0.6, "#1a0e04");
+    bg.addColorStop(0.8, "#3d1a08");
+    bg.addColorStop(1, "#D4551F");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
+    // Warm radial glow at bottom
+    const glow = ctx.createRadialGradient(W / 2, H, 0, W / 2, H, H * 0.5);
+    glow.addColorStop(0, "rgba(212,85,31,0.3)");
+    glow.addColorStop(1, "transparent");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
 
-    // Accent stripe at top
-    const stripe = ctx.createLinearGradient(0, 0, W, 0);
-    stripe.addColorStop(0, "#D4551F");
-    stripe.addColorStop(1, "#f39c12");
-    ctx.fillStyle = stripe;
-    ctx.fillRect(0, 0, W, 8);
-
-    // "LogIt" branding top-left
+    // ---- Header: LOGIT + date ----
     ctx.fillStyle = "#D4551F";
-    ctx.font = "bold 52px Manrope, sans-serif";
-    ctx.fillText("LogIt", 60, 90);
+    ctx.font = "800 54px Manrope, sans-serif";
+    ctx.letterSpacing = "6px";
+    ctx.fillText("LOGIT", PAD, 120);
+    ctx.letterSpacing = "0px";
 
-    // Date top-right
-    ctx.fillStyle = "#9b9890";
-    ctx.font = "400 36px Manrope, sans-serif";
     const dateStr = session.date ? new Date(session.date + "T00:00:00").toLocaleDateString(undefined, {
       weekday: "short", month: "short", day: "numeric", year: "numeric"
     }) : "";
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "500 30px Manrope, sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText(dateStr, W - 60, 90);
+    ctx.fillText(dateStr, W - PAD, 115);
     ctx.textAlign = "left";
 
-    // Session title
-    ctx.fillStyle = "#f5f0e8";
-    ctx.font = "bold 64px Manrope, sans-serif";
+    // ---- Session title (large, multi-line friendly) ----
     const title = session.dayTitle || session.day || "Workout";
-    ctx.fillText(title, 60, 200);
+    ctx.fillStyle = "#f5f0e8";
+    ctx.font = "800 96px Manrope, sans-serif";
+    ctx.letterSpacing = "-1.5px";
+    // Split long titles across two lines
+    const words = title.split(" ");
+    let titleY = 260;
+    if (words.length > 1 && ctx.measureText(title).width > W - PAD * 2) {
+      const mid = Math.ceil(words.length / 2);
+      ctx.fillText(words.slice(0, mid).join(" "), PAD, titleY);
+      ctx.fillText(words.slice(mid).join(" "), PAD, titleY + 100);
+      titleY += 100;
+    } else {
+      ctx.fillText(title, PAD, titleY);
+    }
+    ctx.letterSpacing = "0px";
 
-    // Phase tag
-    const phaseLabel = session.phase === "strength" ? "STRENGTH" : "HYPERTROPHY";
+    // ---- Phase label ----
+    const phaseLabel = session.phase === "strength" ? "STRENGTH PHASE" : "HYPERTROPHY PHASE";
+    const phaseText = `WEEK ${session.week}  ·  ${phaseLabel}`;
     ctx.fillStyle = "#D4551F";
-    ctx.font = "600 32px Manrope, sans-serif";
-    ctx.fillText(`Week ${session.week} · ${phaseLabel}`, 60, 260);
+    ctx.font = "700 28px Manrope, sans-serif";
+    ctx.letterSpacing = "3px";
+    ctx.fillText(phaseText, PAD, titleY + 56);
+    ctx.letterSpacing = "0px";
 
-    // Stats row
+    // ---- Stats row (3 glass chips) ----
     let duration = "";
     if (session.startTime && session.endTime) {
       const ms = new Date(session.endTime) - new Date(session.startTime);
       const mins = Math.round(ms / 60000);
-      duration = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+      duration = mins < 60 ? `${mins}min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
     }
     let totalVolume = 0, totalSets = 0;
     if (session.exercises) {
       session.exercises.forEach(ex => {
-        ex.sets.forEach(s => {
-          totalSets++;
-          totalVolume += (s.weight || 0) * (s.reps || 0);
-        });
+        ex.sets.forEach(s => { totalSets++; totalVolume += (s.weight || 0) * (s.reps || 0); });
       });
     }
-
     const stats = [
       { label: "DURATION", value: duration || "—" },
       { label: "SETS", value: String(totalSets) },
       { label: "VOLUME", value: totalVolume > 0 ? `${(totalVolume / 1000).toFixed(1)}t` : "—" },
-      { label: "EXERCISES", value: String(session.exercises?.length || 0) },
     ];
 
-    let sx = 60;
-    const statW = (W - 120) / stats.length;
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
-    roundRect(ctx, 40, 300, W - 80, 140, 16);
-    ctx.fill();
+    const chipGap = 28;
+    const chipW = (W - PAD * 2 - chipGap * 2) / 3;
+    const chipH = 130;
+    const chipY = titleY + 100;
 
     stats.forEach((stat, i) => {
-      const cx = 60 + statW * i + statW / 2;
-      ctx.fillStyle = "#9b9890";
-      ctx.font = "500 26px Manrope, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(stat.label, cx, 350);
-      ctx.fillStyle = "#f5f0e8";
-      ctx.font = "bold 48px Manrope, sans-serif";
-      ctx.fillText(stat.value, cx, 410);
-    });
-    ctx.textAlign = "left";
+      const cx = PAD + i * (chipW + chipGap);
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      roundRect(ctx, cx, chipY, chipW, chipH, 24);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, cx, chipY, chipW, chipH, 24);
+      ctx.stroke();
 
-    // Exercise list
-    let y = 500;
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#f5f0e8";
+      ctx.font = "800 52px Manrope, sans-serif";
+      ctx.fillText(stat.value, cx + chipW / 2, chipY + 60);
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.font = "600 22px Manrope, sans-serif";
+      ctx.letterSpacing = "2px";
+      ctx.fillText(stat.label, cx + chipW / 2, chipY + 100);
+      ctx.letterSpacing = "0px";
+      ctx.textAlign = "left";
+    });
+
+    // ---- Exercise list (clean rows) ----
+    let y = chipY + chipH + 60;
+
     if (session.exercises) {
       session.exercises.forEach(ex => {
-        if (y > H - 200) return;
-        // Exercise name
-        ctx.fillStyle = "#f5f0e8";
-        ctx.font = "600 38px Manrope, sans-serif";
-        ctx.fillText(ex.name, 60, y);
-        y += 10;
+        if (y > H - 280) return;
+        const exSets = ex.sets || [];
 
-        // Sets
-        ctx.font = "400 30px Manrope, sans-serif";
-        ctx.fillStyle = "#9b9890";
-        ex.sets.forEach((s, i) => {
-          y += 42;
-          if (y > H - 200) return;
-          const setStr = `Set ${i + 1}:  ${s.weight ?? "–"} kg × ${s.reps ?? "–"} reps`;
-          ctx.fillText(setStr, 100, y);
+        // Exercise name
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = "600 36px Manrope, sans-serif";
+        ctx.fillText(ex.name, PAD, y + 6);
+
+        // Set count
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.font = "500 28px Manrope, sans-serif";
+        ctx.fillText(`${exSets.length} sets`, PAD, y + 46);
+
+        // Best set on right
+        let bestVol = 0, bestStr = "";
+        exSets.forEach(s => {
+          const vol = (s.weight || 0) * (s.reps || 0);
+          if (vol > bestVol) { bestVol = vol; bestStr = `${s.weight}×${s.reps}`; }
         });
-        y += 50;
+        if (bestStr) {
+          ctx.fillStyle = "#D4551F";
+          ctx.font = "700 36px Manrope, sans-serif";
+          ctx.textAlign = "right";
+          ctx.fillText(bestStr, W - PAD, y + 24);
+          ctx.textAlign = "left";
+        }
+
+        y += 80;
+
+        // Separator line
+        if (y < H - 280) {
+          ctx.fillStyle = "rgba(255,255,255,0.05)";
+          ctx.fillRect(PAD, y - 14, W - PAD * 2, 1);
+        }
       });
     }
 
-    // Bottom branding bar
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.fillRect(0, H - 120, W, 120);
-    ctx.fillStyle = "#D4551F";
-    ctx.font = "bold 36px Manrope, sans-serif";
+    // ---- Bottom branding ----
     ctx.textAlign = "center";
-    ctx.fillText("LogIt — Track. Lift. Grow.", W / 2, H - 55);
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.font = "800 40px Manrope, sans-serif";
+    ctx.letterSpacing = "8px";
+    ctx.fillText("LOGIT", W / 2, H - 100);
+    ctx.letterSpacing = "0px";
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.font = "500 26px Manrope, sans-serif";
+    ctx.fillText("Track. Lift. Grow.", W / 2, H - 56);
     ctx.textAlign = "left";
 
     canvas.toBlob(blob => resolve(blob), "image/png");
