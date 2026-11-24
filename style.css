@@ -2266,23 +2266,20 @@ html, body {
 .orm-table-row:last-child { border-bottom: none; }
 
 /* ===== FEATURES: Share Button ===== */
-.share-workout-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--accent-orange);
-  background: transparent;
-  color: var(--accent-orange);
-  font-size: 0.78rem; font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 20px;
-  cursor: pointer;
-  margin-top: 8px;
-  transition: background 0.15s, color 0.15s;
+/* Rest timer done button */
+.rest-done-btn{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  width:100%;padding:16px;margin-top:16px;
+  background:linear-gradient(135deg,#2ecc71,#27ae60);
+  color:#fff;font-size:1rem;font-weight:700;
+  border:none;border-radius:16px;cursor:pointer;
+  box-shadow:0 6px 24px rgba(46,204,113,0.35);
+  animation:rest-done-pulse 1.2s ease-in-out infinite;
 }
-.share-workout-btn:hover, .share-workout-btn:active {
-  background: var(--accent-orange); color: #fff;
+@keyframes rest-done-pulse{
+  0%,100%{box-shadow:0 6px 24px rgba(46,204,113,0.35);}
+  50%{box-shadow:0 6px 32px rgba(46,204,113,0.6);}
 }
-.share-workout-btn:disabled { opacity: 0.5; cursor: wait; }
-.share-workout-btn svg { flex-shrink: 0; }
 
 /* ===== FEATURES: Drag Reorder Days ===== */
 .day-btn[draggable="true"] { cursor: grab; touch-action: none; }

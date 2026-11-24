@@ -1,4 +1,4 @@
-// features.js — Rest Timer, PR Tracking, 1RM Calculator, Share Card,
+// features.js — Rest Timer, PR Tracking, 1RM Calculator,
 // Drag-to-Reorder Days, enhanced Streak Calendar & Muscle Volume Tracker.
 
 // =====================================================================
@@ -13,24 +13,46 @@ const RestTimer = (() => {
   let overlay = null;
   let exerciseName = "";
   let nextSetInfo = "";
+  let alarmCtx = null;
+  let alarmNodes = [];
+  let alarmLoopId = null;
 
   function playAlarm() {
+    stopAlarm();
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      [0, 200, 400].forEach((delay, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.type = "square"; osc.frequency.value = 880 + i * 220;
-        gain.gain.value = 0.15;
-        osc.start(ctx.currentTime + delay / 1000);
-        osc.stop(ctx.currentTime + delay / 1000 + 0.15);
-      });
+      alarmCtx = new (window.AudioContext || window.webkitAudioContext)();
+      function beepCycle() {
+        if (!alarmCtx) return;
+        [0, 200, 400].forEach((delay, i) => {
+          const osc = alarmCtx.createOscillator();
+          const gain = alarmCtx.createGain();
+          osc.connect(gain); gain.connect(alarmCtx.destination);
+          osc.type = "square"; osc.frequency.value = 880 + i * 220;
+          gain.gain.value = 0.15;
+          osc.start(alarmCtx.currentTime + delay / 1000);
+          osc.stop(alarmCtx.currentTime + delay / 1000 + 0.15);
+          alarmNodes.push(osc);
+        });
+      }
+      beepCycle();
+      alarmLoopId = setInterval(beepCycle, 1200);
     } catch (e) {}
+  }
+
+  function stopAlarm() {
+    if (alarmLoopId) { clearInterval(alarmLoopId); alarmLoopId = null; }
+    alarmNodes.forEach(n => { try { n.stop(); } catch(e) {} });
+    alarmNodes = [];
+    if (alarmCtx) { try { alarmCtx.close(); } catch(e) {} alarmCtx = null; }
+    if (navigator.vibrate) navigator.vibrate(0);
   }
 
   function vibrate() {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+  }
+
+  function vibrateLoop() {
+    if (navigator.vibrate) navigator.vibrate([300, 200, 300, 200, 300, 1000]);
   }
 
   function notifyDone() {
@@ -85,6 +107,10 @@ const RestTimer = (() => {
           Skip rest
           <span class="rest-skip-arrow">→</span>
         </button>
+        <button class="rest-done-btn" style="display:none;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Done — Stop Alarm
+        </button>
       </div>
       <div class="rest-next-card">
         <div class="rest-next-icon">
@@ -100,12 +126,29 @@ const RestTimer = (() => {
       </div>`;
     document.body.appendChild(overlay);
     overlay.querySelector(".rest-skip-btn").addEventListener("click", stop);
+    overlay.querySelector(".rest-done-btn").addEventListener("click", dismiss);
     return overlay;
   }
 
   const CIRC = 2 * Math.PI * 100; // circumference r=100
 
+  function dismiss() {
+    stopAlarm();
+    if (timerId) { clearInterval(timerId); timerId = null; }
+    remaining = 0;
+    if (overlay) {
+      overlay.classList.remove("open");
+      const skipBtn = overlay.querySelector(".rest-skip-btn");
+      const doneBtn = overlay.querySelector(".rest-done-btn");
+      if (skipBtn) skipBtn.style.display = "";
+      if (doneBtn) doneBtn.style.display = "none";
+      const timeEl = overlay.querySelector(".rest-ring-time");
+      if (timeEl) timeEl.classList.remove("rest-done");
+    }
+  }
+
   function stop() {
+    stopAlarm();
     if (timerId) { clearInterval(timerId); timerId = null; }
     remaining = 0;
     if (overlay) { overlay.classList.remove("open"); }
@@ -130,14 +173,12 @@ const RestTimer = (() => {
       remaining--;
       if (remaining <= 0) {
         clearInterval(timerId); timerId = null; remaining = 0;
-        playAlarm(); vibrate(); notifyDone();
-        // Show done state briefly
+        playAlarm(); vibrateLoop(); notifyDone();
+        // Show done state — alarm loops until Done button is pressed
         ov.querySelector(".rest-ring-time").textContent = "DONE";
         ov.querySelector(".rest-ring-time").classList.add("rest-done");
-        setTimeout(() => {
-          ov.classList.remove("open");
-          ov.querySelector(".rest-ring-time").classList.remove("rest-done");
-        }, 3000);
+        ov.querySelector(".rest-skip-btn").style.display = "none";
+        ov.querySelector(".rest-done-btn").style.display = "";
         return;
       }
       updateDisplay();
@@ -327,230 +368,6 @@ function render1RMCalculator() {
   };
   wInput.addEventListener("input", update);
   rInput.addEventListener("input", update);
-}
-
-
-// =====================================================================
-// 4. SHAREABLE WORKOUT SUMMARY CARD — Strava-style PNG
-// =====================================================================
-function generateShareCard(session) {
-  return new Promise((resolve) => {
-    const canvas = document.createElement("canvas");
-    const W = 1080, H = 1920;
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    const PAD = 84;
-
-    // ---- Background: dark top to warm orange bottom ----
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, "#0a0a0a");
-    bg.addColorStop(0.4, "#0f0a06");
-    bg.addColorStop(0.6, "#1a0e04");
-    bg.addColorStop(0.8, "#3d1a08");
-    bg.addColorStop(1, "#D4551F");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-    // Warm radial glow at bottom
-    const glow = ctx.createRadialGradient(W / 2, H, 0, W / 2, H, H * 0.5);
-    glow.addColorStop(0, "rgba(212,85,31,0.3)");
-    glow.addColorStop(1, "transparent");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, H);
-
-    // ---- Header: LOGIT + date ----
-    ctx.fillStyle = "#D4551F";
-    ctx.font = "800 54px Manrope, sans-serif";
-    ctx.letterSpacing = "6px";
-    ctx.fillText("LOGIT", PAD, 120);
-    ctx.letterSpacing = "0px";
-
-    const dateStr = session.date ? new Date(session.date + "T00:00:00").toLocaleDateString(undefined, {
-      weekday: "short", month: "short", day: "numeric", year: "numeric"
-    }) : "";
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "500 30px Manrope, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(dateStr, W - PAD, 115);
-    ctx.textAlign = "left";
-
-    // ---- Session title (large, multi-line friendly) ----
-    const title = session.dayTitle || session.day || "Workout";
-    ctx.fillStyle = "#f5f0e8";
-    ctx.font = "800 96px Manrope, sans-serif";
-    ctx.letterSpacing = "-1.5px";
-    // Split long titles across two lines
-    const words = title.split(" ");
-    let titleY = 260;
-    if (words.length > 1 && ctx.measureText(title).width > W - PAD * 2) {
-      const mid = Math.ceil(words.length / 2);
-      ctx.fillText(words.slice(0, mid).join(" "), PAD, titleY);
-      ctx.fillText(words.slice(mid).join(" "), PAD, titleY + 100);
-      titleY += 100;
-    } else {
-      ctx.fillText(title, PAD, titleY);
-    }
-    ctx.letterSpacing = "0px";
-
-    // ---- Phase label ----
-    const phaseLabel = session.phase === "strength" ? "STRENGTH PHASE" : "HYPERTROPHY PHASE";
-    const phaseText = `WEEK ${session.week}  ·  ${phaseLabel}`;
-    ctx.fillStyle = "#D4551F";
-    ctx.font = "700 28px Manrope, sans-serif";
-    ctx.letterSpacing = "3px";
-    ctx.fillText(phaseText, PAD, titleY + 56);
-    ctx.letterSpacing = "0px";
-
-    // ---- Stats row (3 glass chips) ----
-    let duration = "";
-    if (session.startTime && session.endTime) {
-      const ms = new Date(session.endTime) - new Date(session.startTime);
-      const mins = Math.round(ms / 60000);
-      duration = mins < 60 ? `${mins}min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
-    }
-    let totalVolume = 0, totalSets = 0;
-    if (session.exercises) {
-      session.exercises.forEach(ex => {
-        ex.sets.forEach(s => { totalSets++; totalVolume += (s.weight || 0) * (s.reps || 0); });
-      });
-    }
-    const stats = [
-      { label: "DURATION", value: duration || "—" },
-      { label: "SETS", value: String(totalSets) },
-      { label: "VOLUME", value: totalVolume > 0 ? `${(totalVolume / 1000).toFixed(1)}t` : "—" },
-    ];
-
-    const chipGap = 28;
-    const chipW = (W - PAD * 2 - chipGap * 2) / 3;
-    const chipH = 130;
-    const chipY = titleY + 100;
-
-    stats.forEach((stat, i) => {
-      const cx = PAD + i * (chipW + chipGap);
-      ctx.fillStyle = "rgba(255,255,255,0.06)";
-      roundRect(ctx, cx, chipY, chipW, chipH, 24);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 1;
-      roundRect(ctx, cx, chipY, chipW, chipH, 24);
-      ctx.stroke();
-
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#f5f0e8";
-      ctx.font = "800 52px Manrope, sans-serif";
-      ctx.fillText(stat.value, cx + chipW / 2, chipY + 60);
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.font = "600 22px Manrope, sans-serif";
-      ctx.letterSpacing = "2px";
-      ctx.fillText(stat.label, cx + chipW / 2, chipY + 100);
-      ctx.letterSpacing = "0px";
-      ctx.textAlign = "left";
-    });
-
-    // ---- Exercise list (clean rows) ----
-    let y = chipY + chipH + 60;
-
-    if (session.exercises) {
-      session.exercises.forEach(ex => {
-        if (y > H - 280) return;
-        const exSets = ex.sets || [];
-
-        // Exercise name
-        ctx.fillStyle = "rgba(255,255,255,0.8)";
-        ctx.font = "600 36px Manrope, sans-serif";
-        ctx.fillText(ex.name, PAD, y + 6);
-
-        // Set count
-        ctx.fillStyle = "rgba(255,255,255,0.35)";
-        ctx.font = "500 28px Manrope, sans-serif";
-        ctx.fillText(`${exSets.length} sets`, PAD, y + 46);
-
-        // Best set on right
-        let bestVol = 0, bestStr = "";
-        exSets.forEach(s => {
-          const vol = (s.weight || 0) * (s.reps || 0);
-          if (vol > bestVol) { bestVol = vol; bestStr = `${s.weight}×${s.reps}`; }
-        });
-        if (bestStr) {
-          ctx.fillStyle = "#D4551F";
-          ctx.font = "700 36px Manrope, sans-serif";
-          ctx.textAlign = "right";
-          ctx.fillText(bestStr, W - PAD, y + 24);
-          ctx.textAlign = "left";
-        }
-
-        y += 80;
-
-        // Separator line
-        if (y < H - 280) {
-          ctx.fillStyle = "rgba(255,255,255,0.05)";
-          ctx.fillRect(PAD, y - 14, W - PAD * 2, 1);
-        }
-      });
-    }
-
-    // ---- Bottom branding ----
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.font = "800 40px Manrope, sans-serif";
-    ctx.letterSpacing = "8px";
-    ctx.fillText("LOGIT", W / 2, H - 100);
-    ctx.letterSpacing = "0px";
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
-    ctx.font = "500 26px Manrope, sans-serif";
-    ctx.fillText("Track. Lift. Grow.", W / 2, H - 56);
-    ctx.textAlign = "left";
-
-    canvas.toBlob(blob => resolve(blob), "image/png");
-  });
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-function addShareButton(container, session) {
-  const btn = document.createElement("button");
-  btn.className = "share-workout-btn";
-  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share workout`;
-  btn.addEventListener("click", async () => {
-    btn.disabled = true;
-    btn.textContent = "Generating…";
-    try {
-      const blob = await generateShareCard(session);
-      if (navigator.share && navigator.canShare) {
-        const file = new File([blob], "logit-workout.png", { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: "LogIt Workout" });
-          btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share workout`;
-          btn.disabled = false;
-          return;
-        }
-      }
-      // Fallback: download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `logit-${session.date || "workout"}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("Card saved to downloads");
-    } catch (e) {
-      showToast("Could not generate share card");
-    }
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share workout`;
-    btn.disabled = false;
-  });
-  container.appendChild(btn);
 }
 
 
@@ -918,45 +735,6 @@ function patchExerciseCards() {
   });
 }
 
-// --- Add share button to history cards ---
-function patchHistoryCards() {
-  const list = document.getElementById("historyList");
-  if (!list) return;
-  list.querySelectorAll(".history-card").forEach(card => {
-    if (card.querySelector(".share-workout-btn")) return; // already added
-    const delBtn = card.querySelector(".history-del");
-    if (!delBtn) return;
-    const sessionId = delBtn.dataset.id;
-    const session = sessions.find(s => s.id === sessionId);
-    if (session && !session.rest && session.exercises?.length) {
-      addShareButton(card, session);
-    }
-  });
-}
-
-// --- Add share button to active session in Train tab ---
-function patchTrainShareButton() {
-  const timingLine = document.getElementById("dayTimingLine");
-  if (!timingLine) return;
-  const parent = timingLine.parentElement;
-  if (!parent || parent.querySelector(".share-workout-btn")) return;
-  // Find current session
-  if (typeof sessions === "undefined" || typeof state === "undefined") return;
-  if (typeof PROGRAM === "undefined" || !PROGRAM) return;
-  const phaseKeys = Object.keys(PROGRAM).filter(k => !k.startsWith("_"));
-  if (!phaseKeys.length) return;
-  const _pk2 = getPhaseForWeek(state.week);
-  const phase = PROGRAM[_pk2];
-  if (!phase?.days) return;
-  const day = (typeof resolveDay === "function") ? resolveDay(state.week, _pk2, state.dayIndex) : phase.days[state.dayIndex];
-  if (!day || day.type !== "training") return;
-  const slotName = phase.days[state.dayIndex].name;
-  const existing = sessions.find(s => s.week === state.week && s.day === slotName);
-  if (existing && !existing.rest && existing.exercises?.length) {
-    addShareButton(parent, existing);
-  }
-}
-
 // --- Initialize all features after DOM ready ---
 function initFeatures() {
   // Observe day content changes to inject rest timer / PR / 1RM
@@ -967,14 +745,7 @@ function initFeatures() {
     });
     observer.observe(dayContent, { childList: true, subtree: false });
     // Initial patch
-    setTimeout(() => { patchExerciseCards(); patchTrainShareButton(); }, 100);
-  }
-
-  // Observe history changes
-  const historyList = document.getElementById("historyList");
-  if (historyList) {
-    const observer2 = new MutationObserver(patchHistoryCards);
-    observer2.observe(historyList, { childList: true });
+    setTimeout(() => { patchExerciseCards(); }, 100);
   }
 
   // Day strip reorder
