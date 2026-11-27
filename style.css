@@ -2334,3 +2334,100 @@ html, body {
 .swap-cancel {
   background: transparent; color: rgba(255,255,255,0.4);
 }
+
+/* ===== TENDON TRAINING ===== */
+.tendon-toggle-wrap{text-align:center;margin:18px 0 4px;}
+.tendon-toggle{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 18px;border-radius:20px;
+  font-size:0.82rem;font-weight:600;letter-spacing:0.02em;
+  background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.45);
+  border:1px solid rgba(255,255,255,0.08);cursor:pointer;
+  transition:all 0.2s;
+}
+.tendon-toggle:hover{background:rgba(255,255,255,0.08);}
+.tendon-toggle.active{
+  background:linear-gradient(135deg,rgba(212,85,31,0.25),rgba(212,85,31,0.12));
+  color:#D4551F;border-color:rgba(212,85,31,0.3);
+}
+.tendon-section{margin-top:12px;}
+.tendon-header{
+  display:flex;align-items:center;gap:8px;
+  font-size:0.9rem;font-weight:700;color:#D4551F;
+  margin-bottom:10px;padding:0 2px;letter-spacing:0.03em;
+}
+.tendon-card{
+  background:rgba(255,255,255,0.04);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;padding:14px 16px;margin-bottom:10px;
+  position:relative;overflow:hidden;
+}
+.tendon-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);
+}
+.tendon-card-name{
+  font-size:0.88rem;font-weight:700;color:#f5f0e8;margin-bottom:8px;
+}
+.tendon-card-exercises{margin-bottom:12px;}
+.tendon-ex-line{
+  font-size:0.78rem;color:rgba(255,255,255,0.45);
+  margin-bottom:3px;display:flex;align-items:center;gap:6px;
+}
+.tendon-type{
+  display:inline-block;padding:1px 7px;border-radius:6px;
+  font-size:0.68rem;font-weight:700;letter-spacing:0.04em;
+  text-transform:uppercase;min-width:36px;text-align:center;
+}
+.tendon-ex-line:first-child .tendon-type{
+  background:rgba(212,85,31,0.18);color:#D4551F;
+}
+.tendon-ex-line:last-child .tendon-type{
+  background:rgba(46,204,113,0.15);color:#2ecc71;
+}
+.tendon-log-row{
+  display:flex;gap:8px;
+}
+.tendon-input-group{
+  flex:1;display:flex;flex-direction:column;gap:2px;
+}
+.tendon-input-group label{
+  font-size:0.65rem;font-weight:600;color:rgba(255,255,255,0.3);
+  text-transform:uppercase;letter-spacing:0.06em;text-align:center;
+}
+.tendon-input{
+  width:100%;padding:8px 6px;border-radius:10px;
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);
+  color:#f5f0e8;font-size:0.88rem;font-weight:600;text-align:center;
+  font-family:inherit;outline:none;transition:border-color 0.2s;
+}
+.tendon-input:focus{border-color:rgba(212,85,31,0.4);}
+.tendon-input::placeholder{color:rgba(255,255,255,0.2);font-weight:400;}
+.tendon-last{
+  margin-top:8px;font-size:0.72rem;color:rgba(255,255,255,0.3);
+  font-weight:500;text-align:center;
+}
+/* Light theme tendon overrides */
+:root[data-theme="light"] .tendon-toggle{
+  background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.4);
+  border-color:rgba(0,0,0,0.08);
+}
+:root[data-theme="light"] .tendon-toggle.active{
+  background:linear-gradient(135deg,rgba(212,85,31,0.12),rgba(212,85,31,0.06));
+  color:#D4551F;border-color:rgba(212,85,31,0.25);
+}
+:root[data-theme="light"] .tendon-card{
+  background:rgba(0,0,0,0.03);border-color:rgba(0,0,0,0.06);
+}
+:root[data-theme="light"] .tendon-card::before{
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,0.06),transparent);
+}
+:root[data-theme="light"] .tendon-card-name{color:#1a1a1a;}
+:root[data-theme="light"] .tendon-ex-line{color:rgba(0,0,0,0.5);}
+:root[data-theme="light"] .tendon-input{
+  background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.08);color:#1a1a1a;
+}
+:root[data-theme="light"] .tendon-input::placeholder{color:rgba(0,0,0,0.25);}
+:root[data-theme="light"] .tendon-last{color:rgba(0,0,0,0.35);}
+:root[data-theme="light"] .tendon-input-group label{color:rgba(0,0,0,0.35);}

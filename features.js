@@ -1,5 +1,5 @@
 // features.js — Rest Timer, PR Tracking, 1RM Calculator,
-// Drag-to-Reorder Days, enhanced Streak Calendar & Muscle Volume Tracker.
+// Drag-to-Reorder Days, enhanced Streak Calendar, Muscle Volume Tracker & Tendon Training.
 
 // =====================================================================
 // 1. REST TIMER — countdown between sets, alarm + haptic, background
@@ -771,6 +771,196 @@ function initFeatures() {
   // Request notification permission early
   RestTimer.requestNotificationPermission();
 }
+
+// =====================================================================
+// TENDON TRAINING — auto-matched tendon exercises after training days
+// =====================================================================
+const TENDON_PREF_KEY = "ironlog_tendon_enabled_v1";
+const TENDON_LOG_KEY = "ironlog_tendon_log_v1";
+
+const TendonTraining = (() => {
+  // Tendon exercise database
+  const TENDON_DB = [
+    { id: "achilles",   label: "Achilles (Heel)",         hold: "Calf raise hold, halfway up",          slowRep: "Standing calf raise / Seated calf raise" },
+    { id: "patellar",   label: "Patellar (Knee)",         hold: "Wall sit or Spanish squat",             slowRep: "Squat / Leg press / Leg extension" },
+    { id: "hamstring",  label: "Hamstring",               hold: "Long-lever bridge hold",                slowRep: "Romanian deadlift / Leg curl" },
+    { id: "glute",      label: "Glute (Outer Hip)",       hold: "Single-leg stance or side plank",       slowRep: "Hip abduction / Step-up" },
+    { id: "adductor",   label: "Adductor (Groin)",        hold: "Ball squeeze between knees",            slowRep: "Copenhagen raise / Adductor machine" },
+    { id: "bicep",      label: "Bicep Tendon (Elbow)",    hold: "Curl hold at 90°",                     slowRep: "Slow curl" },
+    { id: "tricep",     label: "Tricep Tendon (Elbow)",   hold: "Push-up or pushdown hold",              slowRep: "Close-grip press / Pushdown" },
+    { id: "wrist_ext",  label: "Wrist Extensors",         hold: "Wrist extension hold",                  slowRep: "Reverse wrist curl" },
+    { id: "wrist_flex", label: "Wrist Flexors",           hold: "Wrist curl hold",                       slowRep: "Wrist curl" },
+    { id: "grip",       label: "Finger Flexors (Grip)",   hold: "Dead hang",                             slowRep: "Finger curl" },
+    { id: "rotator",    label: "Rotator Cuff (Shoulder)", hold: "External rotation hold",                slowRep: "Cable / Band external rotation" },
+  ];
+
+  // Map program muscle names → relevant tendon IDs
+  const MUSCLE_TENDON_MAP = {
+    "Quadriceps":        ["patellar"],
+    "Calves":            ["achilles"],
+    "Hamstrings":        ["hamstring"],
+    "Glutes":            ["glute", "adductor"],
+    "Adductors":         ["adductor"],
+    "Biceps Brachii":    ["bicep"],
+    "Triceps Brachii":   ["tricep"],
+    "Pectoralis Major":  ["tricep", "rotator"],
+    "Anterior Deltoid":  ["rotator"],
+    "Lateral Deltoid":   ["rotator"],
+    "Posterior Deltoid":  ["rotator"],
+    "Deltoids":          ["rotator"],
+    "Latissimus Dorsi":  ["bicep", "grip"],
+    "Rhomboids":         ["grip"],
+    "Trapezius":         ["rotator"],
+    "Erector Spinae":    ["hamstring"],
+    "Tibialis Anterior": ["achilles"],
+    "Neck (Cervical)":   [],
+    "Rectus Abdominis":  [],
+  };
+
+  // Forearm muscles from exercise-pool category → wrist tendons
+  // Exercises with "Forearm" muscle would map here too
+  const FOREARM_TENDONS = ["wrist_ext", "wrist_flex", "grip"];
+
+  function isEnabled() {
+    return localStorage.getItem(TENDON_PREF_KEY) === "1";
+  }
+  function setEnabled(val) {
+    localStorage.setItem(TENDON_PREF_KEY, val ? "1" : "0");
+  }
+
+  function loadLog() {
+    try { return JSON.parse(localStorage.getItem(TENDON_LOG_KEY)) || {}; } catch { return {}; }
+  }
+  function saveLog(log) {
+    localStorage.setItem(TENDON_LOG_KEY, JSON.stringify(log));
+  }
+
+  // Get tendon exercises matched to a training day's muscles
+  function getTendonsForDay(dayExercises) {
+    const tendonIds = new Set();
+    dayExercises.forEach(ex => {
+      const muscle = (typeof EXERCISE_MUSCLE !== "undefined" && EXERCISE_MUSCLE[ex.name]) || ex.muscle || "";
+      const mapped = MUSCLE_TENDON_MAP[muscle];
+      if (mapped) mapped.forEach(t => tendonIds.add(t));
+      // Catch forearm exercises
+      if (muscle.toLowerCase().includes("forearm")) {
+        FOREARM_TENDONS.forEach(t => tendonIds.add(t));
+      }
+    });
+    return TENDON_DB.filter(t => tendonIds.has(t.id));
+  }
+
+  // Get last logged data for a tendon exercise
+  function getLastLog(tendonId) {
+    const log = loadLog();
+    return log[tendonId] || null;
+  }
+
+  // Save tendon exercise data
+  function logTendon(tendonId, data) {
+    const log = loadLog();
+    log[tendonId] = { ...data, date: new Date().toISOString() };
+    saveLog(log);
+  }
+
+  // Render the tendon section into a container
+  function renderSection(container, dayExercises) {
+    if (!isEnabled()) return;
+    const tendons = getTendonsForDay(dayExercises);
+    if (tendons.length === 0) return;
+
+    const section = document.createElement("div");
+    section.className = "tendon-section";
+    section.innerHTML = `
+      <div class="tendon-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+        <span>Tendon Work</span>
+      </div>
+    `;
+
+    tendons.forEach(t => {
+      const last = getLastLog(t.id);
+      const card = document.createElement("div");
+      card.className = "tendon-card";
+      card.innerHTML = `
+        <div class="tendon-card-name">${t.label}</div>
+        <div class="tendon-card-exercises">
+          <div class="tendon-ex-line"><span class="tendon-type">Hold</span> ${t.hold}</div>
+          <div class="tendon-ex-line"><span class="tendon-type">Slow</span> ${t.slowRep}</div>
+        </div>
+        <div class="tendon-log-row">
+          <div class="tendon-input-group">
+            <input type="number" inputmode="decimal" step="0.5" placeholder="${last ? last.weight : 'kg'}"
+              class="tendon-input" data-tendon="${t.id}" data-field="weight"
+              value="${last ? last.weight : ''}">
+            <label>kg</label>
+          </div>
+          <div class="tendon-input-group">
+            <input type="number" inputmode="numeric" placeholder="${last ? last.duration : 'sec'}"
+              class="tendon-input" data-tendon="${t.id}" data-field="duration"
+              value="${last ? last.duration : ''}">
+            <label>sec</label>
+          </div>
+          <div class="tendon-input-group">
+            <input type="number" inputmode="numeric" placeholder="${last ? last.sets : 'sets'}"
+              class="tendon-input" data-tendon="${t.id}" data-field="sets"
+              value="${last ? last.sets : ''}">
+            <label>sets</label>
+          </div>
+        </div>
+        ${last ? `<div class="tendon-last">Last: ${last.weight || '—'}kg × ${last.duration || '—'}s × ${last.sets || '—'} sets</div>` : ''}
+      `;
+      section.appendChild(card);
+    });
+
+    container.appendChild(section);
+
+    // Wire autosave for tendon inputs
+    const tendonSave = debounce(() => {
+      section.querySelectorAll(".tendon-card").forEach(card => {
+        const inputs = card.querySelectorAll(".tendon-input");
+        const id = inputs[0]?.dataset.tendon;
+        if (!id) return;
+        const weight = inputs[0].value;
+        const duration = inputs[1].value;
+        const sets = inputs[2].value;
+        if (weight || duration || sets) {
+          logTendon(id, {
+            weight: weight ? parseFloat(weight) : null,
+            duration: duration ? parseInt(duration) : null,
+            sets: sets ? parseInt(sets) : null,
+          });
+        }
+      });
+      if (typeof showToast === "function") showToast("Tendon saved");
+    }, 700);
+
+    section.querySelectorAll(".tendon-input").forEach(inp => {
+      inp.addEventListener("input", tendonSave);
+    });
+  }
+
+  // Render toggle chip for the train tab
+  function renderToggle(container, dayExercises, renderCallback) {
+    const wrap = document.createElement("div");
+    wrap.className = "tendon-toggle-wrap";
+    const enabled = isEnabled();
+    wrap.innerHTML = `
+      <button class="tendon-toggle ${enabled ? 'active' : ''}" id="tendonToggle">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+        Tendon Work
+      </button>
+    `;
+    container.appendChild(wrap);
+
+    wrap.querySelector("#tendonToggle").addEventListener("click", () => {
+      setEnabled(!isEnabled());
+      renderCallback();
+    });
+  }
+
+  return { isEnabled, renderSection, renderToggle, getTendonsForDay, TENDON_DB };
+})();
 
 // Auto-init
 if (document.readyState === "loading") {

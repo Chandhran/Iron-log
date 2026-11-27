@@ -1,5 +1,5 @@
 // Service Worker — offline caching for Iron Log
-const CACHE_NAME = "ironlog-v18";
+const CACHE_NAME = "ironlog-v19";
 const APP_FILES = [
   "./",
   "./index.html",

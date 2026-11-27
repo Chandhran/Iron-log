@@ -1003,6 +1003,12 @@ function renderDayContent() {
     container.appendChild(renderExerciseCard(ex, exIdx));
   });
 
+  // Tendon training toggle + section
+  if (typeof TendonTraining !== "undefined") {
+    TendonTraining.renderToggle(container, day.exercises, renderDayContent);
+    TendonTraining.renderSection(container, day.exercises);
+  }
+
   // Wire alternative-swap buttons
   container.querySelectorAll(".alt-chip").forEach(btn => {
     btn.addEventListener("click", () => {
